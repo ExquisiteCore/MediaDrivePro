@@ -1,0 +1,24 @@
+[server]
+host = "0.0.0.0"
+port = 8080
+
+[database]
+url = "postgres://mediadrive:mediadrive@localhost:5432/mediadrive"
+max_connections = 20
+
+[storage]
+backend = "fs"
+
+[storage.fs]
+root = "./uploads"
+
+[storage.s3]
+bucket = "mediadrive"
+region = "us-east-1"
+endpoint = ""
+access_key_id = ""
+secret_access_key = ""
+
+[auth]
+jwt_secret = "dev-secret-change-in-production"
+access_token_ttl_secs = 1800
