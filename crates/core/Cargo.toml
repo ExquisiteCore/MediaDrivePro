@@ -1,0 +1,19 @@
+[package]
+name = "mdp-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+mdp-common.workspace = true
+mdp-auth.workspace = true
+mdp-storage.workspace = true
+sea-orm.workspace = true
+opendal.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+tracing.workspace = true
+sha2.workspace = true
+hex.workspace = true
+futures.workspace = true
