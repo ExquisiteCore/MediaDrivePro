@@ -1,0 +1,10 @@
+[package]
+name = "mdp-storage"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+mdp-common.workspace = true
+opendal.workspace = true
+uuid.workspace = true
+tracing.workspace = true
