@@ -35,8 +35,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("Database connected");
 
     // Run migrations
-    migration::Migrator::up(&db, None).await?;
-    tracing::info!("Migrations applied");
+    if config.database.auto_migrate {
+        migration::Migrator::up(&db, None).await?;
+        tracing::info!("Migrations applied");
+    }
 
     // Initialize storage
     let storage = mdp_storage::create_operator(&config.storage)

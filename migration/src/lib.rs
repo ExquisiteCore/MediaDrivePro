@@ -15,4 +15,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20250305_000003_create_files_table::Migration),
         ]
     }
+
+    fn migration_table_name() -> sea_orm::DynIden {
+        Alias::new("_migrations").into_iden()
+    }
 }

@@ -5,6 +5,7 @@ port = 8080
 [database]
 url = "sqlite:./data/mediadrive.db?mode=rwc"
 max_connections = 5
+auto_migrate = true
 
 [storage]
 backend = "fs"
