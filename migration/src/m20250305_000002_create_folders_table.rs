@@ -20,12 +20,12 @@ impl MigrationTrait for Migration {
                     .col(
                         timestamp_with_time_zone(Folders::CreatedAt)
                             .not_null()
-                            .extra("DEFAULT NOW()".to_string()),
+                            .extra("DEFAULT CURRENT_TIMESTAMP".to_string()),
                     )
                     .col(
                         timestamp_with_time_zone(Folders::UpdatedAt)
                             .not_null()
-                            .extra("DEFAULT NOW()".to_string()),
+                            .extra("DEFAULT CURRENT_TIMESTAMP".to_string()),
                     )
                     .foreign_key(
                         ForeignKey::create()

@@ -3,8 +3,8 @@ host = "0.0.0.0"
 port = 8080
 
 [database]
-url = "postgres://mediadrive:mediadrive@localhost:5432/mediadrive"
-max_connections = 20
+url = "sqlite:./data/mediadrive.db?mode=rwc"
+max_connections = 5
 
 [storage]
 backend = "fs"

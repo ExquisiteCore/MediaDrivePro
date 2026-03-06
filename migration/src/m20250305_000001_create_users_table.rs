@@ -21,12 +21,12 @@ impl MigrationTrait for Migration {
                     .col(
                         timestamp_with_time_zone(Users::CreatedAt)
                             .not_null()
-                            .extra("DEFAULT NOW()".to_string()),
+                            .extra("DEFAULT CURRENT_TIMESTAMP".to_string()),
                     )
                     .col(
                         timestamp_with_time_zone(Users::UpdatedAt)
                             .not_null()
-                            .extra("DEFAULT NOW()".to_string()),
+                            .extra("DEFAULT CURRENT_TIMESTAMP".to_string()),
                     )
                     .to_owned(),
             )

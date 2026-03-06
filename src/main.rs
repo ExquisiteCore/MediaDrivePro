@@ -20,6 +20,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Connect to database
+    // For SQLite, ensure the parent directory exists
+    if config.database.url.starts_with("sqlite:") {
+        if let Some(path) = config.database.url.strip_prefix("sqlite:") {
+            let path = path.split('?').next().unwrap_or(path);
+            if let Some(parent) = std::path::Path::new(path).parent() {
+                std::fs::create_dir_all(parent).ok();
+            }
+        }
+    }
     let mut db_opts = ConnectOptions::new(&config.database.url);
     db_opts.max_connections(config.database.max_connections);
     let db = Database::connect(db_opts).await?;
