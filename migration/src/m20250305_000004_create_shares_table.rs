@@ -2,7 +2,6 @@ use sea_orm_migration::{prelude::*, schema::*};
 
 use crate::m20250305_000001_create_users_table::Users;
 use crate::m20250305_000002_create_folders_table::Folders;
-use crate::m20250305_000003_create_files_table::Files;
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
