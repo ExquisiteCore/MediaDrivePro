@@ -85,8 +85,9 @@ GET  /api/v1/auth/me         — 当前用户信息
 
 ```
 POST   /api/v1/files              — 上传文件（multipart/form-data）
-GET    /api/v1/files              — 文件列表（?folder_id=&page=&per_page=）
+GET    /api/v1/files              — 文件列表（?folder_id=&page=&per_page=&search=&sort=&order=）
 GET    /api/v1/files/:id          — 文件详情
+PUT    /api/v1/files/:id          — 重命名/移动文件
 GET    /api/v1/files/:id/download — 下载文件
 DELETE /api/v1/files/:id          — 删除文件
 ```
@@ -97,8 +98,20 @@ DELETE /api/v1/files/:id          — 删除文件
 POST   /api/v1/folders              — 创建目录
 GET    /api/v1/folders              — 根目录内容
 GET    /api/v1/folders/:id          — 目录详情
+PUT    /api/v1/folders/:id          — 重命名/移动目录
 GET    /api/v1/folders/:id/children — 子目录和文件
 DELETE /api/v1/folders/:id          — 删除目录
+```
+
+### 分享
+
+```
+POST   /api/v1/shares         — 创建分享（可设密码、过期时间、下载次数）
+GET    /api/v1/shares         — 列出我的分享
+DELETE /api/v1/shares/:id     — 取消分享
+GET    /s/:token              — 公开访问分享（无需认证）
+POST   /s/:token/verify       — 验证提取码
+GET    /s/:token/download     — 通过分享下载文件
 ```
 
 ### 使用示例
@@ -142,8 +155,8 @@ MediaDrivePro/
 ## 路线图
 
 - [x] V0.1 — 基础骨架（用户认证 + 文件上传下载 + 目录管理）
-- [ ] V0.2 — 网盘完善（分片上传、搜索、分享、配额）
-- [ ] V0.3 — WebDAV
+- [x] V0.2 — 网盘完善（重命名/移动、搜索排序、分享、存储配额）
+- [ ] V0.3 — WebDAV + 分片上传
 - [ ] V1.0 — Web UI + Docker 部署
 - [ ] V1.1 — 图床
 - [ ] V2.0 — 视频播放 + 转码 + 媒体库
