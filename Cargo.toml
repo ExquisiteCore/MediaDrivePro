@@ -2,6 +2,9 @@
 members = ["migration", "crates/*"]
 resolver = "2"
 
+[workspace.package]
+edition = "2024"
+
 [workspace.dependencies]
 # Web framework
 axum = { version = "0.8", features = ["multipart"] }
@@ -55,7 +58,7 @@ migration = { path = "migration" }
 [package]
 name = "mediadrive-pro"
 version = "0.1.0"
-edition = "2021"
+edition.workspace = true
 
 [dependencies]
 mdp-common.workspace = true
