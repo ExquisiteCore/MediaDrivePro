@@ -1,9 +1,9 @@
 use axum::{
+    Json, Router,
     extract::{Multipart, Path, Query, State},
-    http::{header, StatusCode},
+    http::{StatusCode, header},
     response::IntoResponse,
     routing::{get, post},
-    Json, Router,
 };
 use mdp_auth::middleware::AuthUser;
 use mdp_common::{error::AppError, response::ApiResponse};
@@ -17,7 +17,10 @@ use crate::state::AppState;
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/files", post(upload).get(list))
-        .route("/files/{id}", get(get_file).put(update_file).delete(delete_file))
+        .route(
+            "/files/{id}",
+            get(get_file).put(update_file).delete(delete_file),
+        )
         .route("/files/{id}/download", get(download))
         .route("/files/multipart/init", post(multipart_init))
         .route(
@@ -187,7 +190,9 @@ async fn multipart_init(
         auth.user_id,
         &req.file_name,
         req.folder_id,
-        req.content_type.as_deref().unwrap_or("application/octet-stream"),
+        req.content_type
+            .as_deref()
+            .unwrap_or("application/octet-stream"),
     )?;
     Ok(ApiResponse::ok(resp))
 }

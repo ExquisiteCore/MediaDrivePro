@@ -265,7 +265,9 @@ impl FileService {
 
         if let Some(name) = new_name {
             if name.is_empty() || name.len() > 255 {
-                return Err(AppError::Validation("文件名长度需在 1-255 之间".to_string()));
+                return Err(AppError::Validation(
+                    "文件名长度需在 1-255 之间".to_string(),
+                ));
             }
             active.name = Set(name.to_string());
         }

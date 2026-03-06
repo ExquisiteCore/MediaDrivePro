@@ -9,9 +9,7 @@ pub async fn verify_basic_auth(
     db: &DatabaseConnection,
     auth_header: &str,
 ) -> Result<(Uuid, String), ()> {
-    let encoded = auth_header
-        .strip_prefix("Basic ")
-        .ok_or(())?;
+    let encoded = auth_header.strip_prefix("Basic ").ok_or(())?;
 
     let decoded = base64::engine::general_purpose::STANDARD
         .decode(encoded)

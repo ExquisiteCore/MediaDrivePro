@@ -52,17 +52,13 @@ impl UserService {
     ) -> Result<TokenResponse, AppError> {
         // Validate input
         if username.len() < 2 || username.len() > 64 {
-            return Err(AppError::Validation(
-                "用户名长度需在 2-64 之间".to_string(),
-            ));
+            return Err(AppError::Validation("用户名长度需在 2-64 之间".to_string()));
         }
         if !email.contains('@') {
             return Err(AppError::Validation("邮箱格式不正确".to_string()));
         }
         if raw_password.len() < 6 {
-            return Err(AppError::Validation(
-                "密码长度至少 6 位".to_string(),
-            ));
+            return Err(AppError::Validation("密码长度至少 6 位".to_string()));
         }
 
         // Check duplicates

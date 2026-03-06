@@ -16,7 +16,11 @@ impl MigrationTrait for Migration {
                     .col(string_len(Users::Email, 255).unique_key().not_null())
                     .col(string_len(Users::Password, 255).not_null())
                     .col(string_len(Users::Role, 16).not_null().default("user"))
-                    .col(big_integer(Users::StorageQuota).not_null().default(10737418240i64))
+                    .col(
+                        big_integer(Users::StorageQuota)
+                            .not_null()
+                            .default(10737418240i64),
+                    )
                     .col(big_integer(Users::StorageUsed).not_null().default(0))
                     .col(
                         timestamp_with_time_zone(Users::CreatedAt)

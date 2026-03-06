@@ -1,5 +1,5 @@
 use mdp_common::config::StorageConfig;
-use opendal::{services, Operator};
+use opendal::{Operator, services};
 
 /// Create an OpenDAL Operator based on the storage configuration.
 pub fn create_operator(config: &StorageConfig) -> Result<Operator, opendal::Error> {

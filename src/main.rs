@@ -1,7 +1,7 @@
 use mdp_common::config::AppConfig;
 use sea_orm::{ConnectOptions, Database};
 use sea_orm_migration::MigratorTrait;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -84,18 +84,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         app = app
             .route(
                 &format!("{prefix}/{{*rest}}"),
-                axum::routing::any(mdp_webdav::webdav_handler)
-                    .with_state(webdav_state.clone()),
+                axum::routing::any(mdp_webdav::webdav_handler).with_state(webdav_state.clone()),
             )
             .route(
                 prefix,
-                axum::routing::any(mdp_webdav::webdav_handler)
-                    .with_state(webdav_state.clone()),
+                axum::routing::any(mdp_webdav::webdav_handler).with_state(webdav_state.clone()),
             )
             .route(
                 &format!("{prefix}/"),
-                axum::routing::any(mdp_webdav::webdav_handler)
-                    .with_state(webdav_state),
+                axum::routing::any(mdp_webdav::webdav_handler).with_state(webdav_state),
             );
         tracing::info!("WebDAV enabled at {}", config.webdav.prefix);
     }

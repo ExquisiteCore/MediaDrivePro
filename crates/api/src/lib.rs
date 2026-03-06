@@ -6,8 +6,8 @@ mod auth;
 mod files;
 mod folders;
 mod shares;
-mod tokens;
 pub mod state;
+mod tokens;
 
 pub fn build_router(state: state::AppState) -> Router {
     let api_v1 = Router::new()

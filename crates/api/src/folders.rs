@@ -1,8 +1,8 @@
 use axum::{
+    Json, Router,
     extract::{Path, State},
     http::StatusCode,
     routing::{get, post},
-    Json, Router,
 };
 use mdp_auth::middleware::AuthUser;
 use mdp_common::{error::AppError, response::ApiResponse};
@@ -15,7 +15,10 @@ use crate::state::AppState;
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/folders", post(create).get(list_root))
-        .route("/folders/{id}", get(get_folder).put(update_folder).delete(delete_folder))
+        .route(
+            "/folders/{id}",
+            get(get_folder).put(update_folder).delete(delete_folder),
+        )
         .route("/folders/{id}/children", get(list_children))
 }
 
@@ -30,8 +33,7 @@ async fn create(
     auth: AuthUser,
     Json(req): Json<CreateFolderRequest>,
 ) -> Result<ApiResponse<FolderInfo>, AppError> {
-    let folder =
-        FolderService::create(&state.db, auth.user_id, req.parent_id, &req.name).await?;
+    let folder = FolderService::create(&state.db, auth.user_id, req.parent_id, &req.name).await?;
     Ok(ApiResponse::ok(folder))
 }
 

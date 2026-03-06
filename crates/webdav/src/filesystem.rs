@@ -129,7 +129,11 @@ impl DavFile for MdpOpenFile {
         async move { Ok(b) }.boxed()
     }
 
-    #[allow(clippy::cast_possible_wrap, clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+    #[allow(
+        clippy::cast_possible_wrap,
+        clippy::cast_sign_loss,
+        clippy::cast_possible_truncation
+    )]
     fn seek(&mut self, pos: io::SeekFrom) -> FsFuture<'_, u64> {
         let new_pos = match pos {
             io::SeekFrom::Start(n) => n as i64,
@@ -403,8 +407,7 @@ impl DavFileSystem for MdpDavFs {
             let mut entries: Vec<Box<dyn DavDirEntry>> = Vec::new();
 
             // Sub-folders
-            let mut fq = folders::Entity::find()
-                .filter(folders::Column::UserId.eq(self.user_id));
+            let mut fq = folders::Entity::find().filter(folders::Column::UserId.eq(self.user_id));
             if let Some(fid) = folder_id {
                 fq = fq.filter(folders::Column::ParentId.eq(fid));
             } else {
@@ -499,10 +502,7 @@ impl DavFileSystem for MdpDavFs {
                 created_at: Set(now),
                 updated_at: Set(now),
             };
-            folder
-                .insert(&self.db)
-                .await
-                .map_err(|_| FsError::Exists)?;
+            folder.insert(&self.db).await.map_err(|_| FsError::Exists)?;
             Ok(())
         }
         .boxed()
@@ -595,8 +595,7 @@ impl DavFileSystem for MdpDavFs {
                         .to_vec();
 
                     let file_id = Uuid::new_v4();
-                    let storage_key =
-                        mdp_storage::storage_key::file(self.user_id, file_id);
+                    let storage_key = mdp_storage::storage_key::file(self.user_id, file_id);
                     self.storage
                         .write(&storage_key, data)
                         .await

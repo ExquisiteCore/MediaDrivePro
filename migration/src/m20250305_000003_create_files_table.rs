@@ -27,11 +27,7 @@ impl MigrationTrait for Migration {
                             .not_null()
                             .default("fs"),
                     )
-                    .col(
-                        string_len(Files::Status, 16)
-                            .not_null()
-                            .default("active"),
-                    )
+                    .col(string_len(Files::Status, 16).not_null().default("active"))
                     .col(
                         timestamp_with_time_zone(Files::CreatedAt)
                             .not_null()

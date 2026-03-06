@@ -1,4 +1,8 @@
-use axum::{extract::State, routing::{get, post}, Json, Router};
+use axum::{
+    Json, Router,
+    extract::State,
+    routing::{get, post},
+};
 use mdp_auth::middleware::AuthUser;
 use mdp_common::{error::AppError, response::ApiResponse};
 use mdp_core::user::{TokenResponse, UserService};

@@ -107,8 +107,7 @@ impl FolderService {
         }
 
         // Sub-folders
-        let mut folder_query = folders::Entity::find()
-            .filter(folders::Column::UserId.eq(user_id));
+        let mut folder_query = folders::Entity::find().filter(folders::Column::UserId.eq(user_id));
 
         if let Some(fid) = folder_id {
             folder_query = folder_query.filter(folders::Column::ParentId.eq(fid));
@@ -185,7 +184,9 @@ impl FolderService {
 
         if let Some(name) = new_name {
             if name.is_empty() || name.len() > 255 {
-                return Err(AppError::Validation("目录名长度需在 1-255 之间".to_string()));
+                return Err(AppError::Validation(
+                    "目录名长度需在 1-255 之间".to_string(),
+                ));
             }
             active.name = Set(name.to_string());
         }

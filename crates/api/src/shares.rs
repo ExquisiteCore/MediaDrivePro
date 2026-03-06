@@ -1,9 +1,9 @@
 use axum::{
+    Json, Router,
     extract::{Path, State},
-    http::{header, StatusCode},
+    http::{StatusCode, header},
     response::IntoResponse,
     routing::{get, post},
-    Json, Router,
 };
 use mdp_auth::middleware::AuthUser;
 use mdp_common::{error::AppError, response::ApiResponse};
