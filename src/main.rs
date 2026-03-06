@@ -79,7 +79,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let webdav_router = axum::Router::new()
             .fallback(mdp_webdav::webdav_handler)
             .with_state(webdav_state);
-        app = app.nest(&config.webdav.prefix, webdav_router);
+        // Use nest_service (not nest) so that /dav/ root path is also handled
+        app = app.nest_service(&config.webdav.prefix, webdav_router);
         tracing::info!("WebDAV enabled at {}", config.webdav.prefix);
     }
 
