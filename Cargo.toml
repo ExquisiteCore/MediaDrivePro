@@ -72,6 +72,7 @@ edition.workspace = true
 
 [dependencies]
 mdp-common.workspace = true
+mdp-core.workspace = true
 mdp-api.workspace = true
 mdp-storage.workspace = true
 mdp-webdav.workspace = true

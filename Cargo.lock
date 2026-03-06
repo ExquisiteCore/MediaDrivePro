@@ -1707,6 +1707,7 @@ dependencies = [
  "dashmap",
  "mdp-api",
  "mdp-common",
+ "mdp-core",
  "mdp-storage",
  "mdp-webdav",
  "migration",

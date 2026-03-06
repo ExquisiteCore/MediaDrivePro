@@ -8,7 +8,7 @@ use axum::{
     response::IntoResponse,
 };
 use dav_server::{DavConfig, DavHandler};
-use http_body_util::BodyStream;
+use http_body_util::BodyExt;
 use opendal::Operator;
 use sea_orm::DatabaseConnection;
 
@@ -56,13 +56,17 @@ pub async fn webdav_handler(
         .filesystem(Box::new(fs))
         .build_handler();
 
-    // Use handle_with to pass strip_prefix config per-request
     let config = DavConfig::new().strip_prefix("/dav");
 
     let dav_resp = dav_handler.handle_with(config, req).await;
 
-    // Convert dav_server::body::Body to axum::body::Body
+    // Convert dav_server::body::Body → axum::body::Body
+    // dav body implements HttpBody<Data=Bytes, Error=io::Error>
+    // We need to collect it and convert
     let (parts, dav_body) = dav_resp.into_parts();
-    let axum_body = Body::from_stream(BodyStream::new(dav_body));
+    let mapped = dav_body.map_err(|e| {
+        axum::Error::new(e)
+    });
+    let axum_body = Body::new(mapped);
     Response::from_parts(parts, axum_body)
 }
