@@ -59,7 +59,9 @@ edition = "2021"
 [dependencies]
 mdp-common.workspace = true
 mdp-api.workspace = true
+mdp-storage.workspace = true
 migration.workspace = true
+axum.workspace = true
 sea-orm.workspace = true
 sea-orm-migration = { workspace = true, features = ["runtime-tokio-rustls"] }
 tokio.workspace = true
