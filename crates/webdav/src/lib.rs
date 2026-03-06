@@ -7,7 +7,7 @@ use axum::{
     http::{Request, Response, StatusCode},
     response::IntoResponse,
 };
-use dav_server::DavHandler;
+use dav_server::{DavConfig, DavHandler};
 use http_body_util::BodyExt;
 use opendal::Operator;
 use sea_orm::DatabaseConnection;
@@ -19,10 +19,11 @@ pub struct WebDavState {
     pub db: DatabaseConnection,
     pub storage: Operator,
     pub storage_backend: String,
+    pub prefix: String,
 }
 
 /// Axum handler that processes all WebDAV requests under /dav/.
-/// Mounted via `nest("/dav", ...)` so the prefix is already stripped.
+/// The full request URI is preserved; dav-server strips the prefix.
 pub async fn webdav_handler(
     State(state): State<WebDavState>,
     req: Request<Body>,
@@ -63,13 +64,13 @@ pub async fn webdav_handler(
         .filesystem(Box::new(fs))
         .build_handler();
 
-    // No strip_prefix needed — nest() already stripped "/dav"
-    let dav_resp = dav_handler.handle(req).await;
+    // strip_prefix handles both request path and Destination header
+    let config = DavConfig::new().strip_prefix(&state.prefix);
+    let dav_resp = dav_handler.handle_with(config, req).await;
 
     tracing::debug!("WebDAV dav-server responded: {}", dav_resp.status());
 
     // Convert dav_server::body::Body → axum::body::Body
-    // Collect the full body to avoid streaming conversion issues
     let (parts, dav_body) = dav_resp.into_parts();
     match BodyExt::collect(dav_body).await {
         Ok(collected) => {

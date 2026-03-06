@@ -75,12 +75,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             db,
             storage,
             storage_backend: config.storage.backend.clone(),
+            prefix: config.webdav.prefix.clone(),
         };
-        let webdav_router = axum::Router::new()
-            .fallback(mdp_webdav::webdav_handler)
-            .with_state(webdav_state);
-        // Use nest_service (not nest) so that /dav/ root path is also handled
-        app = app.nest_service(&config.webdav.prefix, webdav_router);
+        // Use wildcard routes so the full request URI (including /dav prefix) is
+        // preserved. dav-server's strip_prefix then handles both request path and
+        // Destination header consistently.
+        let prefix = &config.webdav.prefix;
+        app = app
+            .route(
+                &format!("{prefix}/{{*rest}}"),
+                axum::routing::any(mdp_webdav::webdav_handler)
+                    .with_state(webdav_state.clone()),
+            )
+            .route(
+                prefix,
+                axum::routing::any(mdp_webdav::webdav_handler)
+                    .with_state(webdav_state.clone()),
+            )
+            .route(
+                &format!("{prefix}/"),
+                axum::routing::any(mdp_webdav::webdav_handler)
+                    .with_state(webdav_state),
+            );
         tracing::info!("WebDAV enabled at {}", config.webdav.prefix);
     }
 
