@@ -103,6 +103,23 @@ GET    /api/v1/folders/:id/children — 子目录和文件
 DELETE /api/v1/folders/:id          — 删除目录
 ```
 
+### API Token
+
+```
+POST   /api/v1/tokens      — 创建 API Token（返回明文，仅此一次）
+GET    /api/v1/tokens       — 列出所有 Token
+DELETE /api/v1/tokens/:id   — 删除 Token
+```
+
+### 分片上传
+
+```
+POST   /api/v1/files/multipart/init                  — 初始化分片上传
+PUT    /api/v1/files/multipart/:upload_id/:part_num   — 上传分片
+POST   /api/v1/files/multipart/:upload_id/complete    — 完成上传（合并分片）
+DELETE /api/v1/files/multipart/:upload_id             — 取消上传
+```
+
 ### 分享
 
 ```
@@ -113,6 +130,18 @@ GET    /s/:token              — 公开访问分享（无需认证）
 POST   /s/:token/verify       — 验证提取码
 GET    /s/:token/download     — 通过分享下载文件
 ```
+
+### WebDAV
+
+通过 WebDAV 协议挂载为本地磁盘，使用 API Token 进行 HTTP Basic Auth 认证。
+
+```
+挂载地址: http://localhost:8080/dav/
+用户名:   <注册的用户名>
+密码:     <API Token 明文>
+```
+
+支持操作：PROPFIND、GET、PUT、MKCOL、DELETE、MOVE、COPY、OPTIONS
 
 ### 使用示例
 
@@ -148,15 +177,16 @@ MediaDrivePro/
     ├── common/           # 配置、错误、响应类型
     ├── auth/             # JWT、密码哈希、认证中间件
     ├── storage/          # OpenDAL 存储封装
-    ├── core/             # 业务逻辑（用户/文件/目录 Service）
-    └── api/              # HTTP 路由和处理器
+    ├── core/             # 业务逻辑（用户/文件/目录/Token/分片上传 Service）
+    ├── api/              # HTTP 路由和处理器
+    └── webdav/           # WebDAV 协议实现（dav-server + Basic Auth）
 ```
 
 ## 路线图
 
 - [x] V0.1 — 基础骨架（用户认证 + 文件上传下载 + 目录管理）
 - [x] V0.2 — 网盘完善（重命名/移动、搜索排序、分享、存储配额）
-- [ ] V0.3 — WebDAV + 分片上传
+- [x] V0.3 — WebDAV + 分片上传 + API Token
 - [ ] V1.0 — Web UI + Docker 部署
 - [ ] V1.1 — 图床
 - [ ] V2.0 — 视频播放 + 转码 + 媒体库
