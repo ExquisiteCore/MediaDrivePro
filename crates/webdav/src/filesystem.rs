@@ -1,15 +1,21 @@
 use chrono::Utc;
 use dav_server::davpath::DavPath;
-use dav_server::fs::*;
+use dav_server::fs::{
+    DavDirEntry, DavFile, DavFileSystem, DavMetaData, FsError, FsFuture, FsResult, FsStream,
+    OpenOptions, ReadDirMeta,
+};
 use futures::FutureExt;
 use opendal::Operator;
-use sea_orm::*;
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, ModelTrait, QueryFilter, Set,
+};
+use sha2::{Digest, Sha256};
 use std::io;
 use uuid::Uuid;
 
 use mdp_core::entity::{files, folders};
 
-/// A WebDAV filesystem backed by SeaORM (metadata) + OpenDAL (data).
+/// A `WebDAV` filesystem backed by `SeaORM` (metadata) + `OpenDAL` (data).
 #[derive(Clone, Debug)]
 pub struct MdpDavFs {
     db: DatabaseConnection,
@@ -77,7 +83,7 @@ impl DavDirEntry for MdpDirEntry {
     fn name(&self) -> Vec<u8> {
         self.name.clone().into_bytes()
     }
-    fn metadata<'a>(&'a self) -> FsFuture<'a, Box<dyn DavMetaData>> {
+    fn metadata(&self) -> FsFuture<'_, Box<dyn DavMetaData>> {
         let meta = self.meta.clone();
         async move { Ok(Box::new(meta) as Box<dyn DavMetaData>) }.boxed()
     }
@@ -91,7 +97,7 @@ struct MdpOpenFile {
 }
 
 impl DavFile for MdpOpenFile {
-    fn metadata<'a>(&'a mut self) -> FsFuture<'a, Box<dyn DavMetaData>> {
+    fn metadata(&mut self) -> FsFuture<'_, Box<dyn DavMetaData>> {
         let len = self.data.len() as u64;
         async move {
             Ok(Box::new(MdpMetaData {
@@ -104,7 +110,7 @@ impl DavFile for MdpOpenFile {
         .boxed()
     }
 
-    fn write_buf<'a>(&'a mut self, buf: Box<dyn bytes::Buf + Send>) -> FsFuture<'a, ()> {
+    fn write_buf(&mut self, buf: Box<dyn bytes::Buf + Send>) -> FsFuture<'_, ()> {
         let chunk = buf.chunk().to_vec();
         self.data.extend_from_slice(&chunk);
         async { Ok(()) }.boxed()
@@ -123,6 +129,7 @@ impl DavFile for MdpOpenFile {
         async move { Ok(b) }.boxed()
     }
 
+    #[allow(clippy::cast_possible_wrap, clippy::cast_sign_loss, clippy::cast_possible_truncation)]
     fn seek(&mut self, pos: io::SeekFrom) -> FsFuture<'_, u64> {
         let new_pos = match pos {
             io::SeekFrom::Start(n) => n as i64,
@@ -141,12 +148,13 @@ impl DavFile for MdpOpenFile {
     }
 }
 
+#[allow(clippy::cast_sign_loss)]
 fn to_system_time(dt: chrono::DateTime<Utc>) -> std::time::SystemTime {
     std::time::UNIX_EPOCH + std::time::Duration::from_secs(dt.timestamp() as u64)
 }
 
 impl MdpDavFs {
-    /// Resolve a WebDAV path to our DB entities.
+    /// Resolve a `WebDAV` path to our DB entities.
     async fn resolve_path(&self, path: &DavPath) -> ResolvedPath {
         let path_str = path.as_url_string();
         let path_str = path_str.trim_start_matches('/');
@@ -215,7 +223,7 @@ impl MdpDavFs {
         ResolvedPath::Root
     }
 
-    /// Get the parent folder_id for a given path.
+    /// Get the parent `folder_id` for a given path.
     async fn resolve_parent(&self, path: &DavPath) -> Result<Option<Uuid>, FsError> {
         let path_str = path.as_url_string();
         let path_str = path_str.trim_start_matches('/');
@@ -427,6 +435,7 @@ impl DavFileSystem for MdpDavFs {
             }
             if let Ok(files_list) = fileq.all(&self.db).await {
                 for f in files_list {
+                    #[allow(clippy::cast_sign_loss)]
                     entries.push(Box::new(MdpDirEntry {
                         name: f.name.clone(),
                         meta: MdpMetaData {
@@ -460,6 +469,7 @@ impl DavFileSystem for MdpDavFs {
                     modified: to_system_time(f.updated_at),
                     created: to_system_time(f.created_at),
                 }) as Box<dyn DavMetaData>),
+                #[allow(clippy::cast_sign_loss)]
                 ResolvedPath::File(f) => Ok(Box::new(MdpMetaData {
                     is_dir: false,
                     len: f.size as u64,
@@ -620,7 +630,7 @@ impl DavFileSystem for MdpDavFs {
     }
 }
 
-/// A write-only file handle for WebDAV PUT. Writes to storage on flush.
+/// A write-only file handle for `WebDAV` PUT. Writes to storage on flush.
 #[derive(Debug)]
 struct MdpWriteFile {
     db: DatabaseConnection,
@@ -633,7 +643,7 @@ struct MdpWriteFile {
 }
 
 impl DavFile for MdpWriteFile {
-    fn metadata<'a>(&'a mut self) -> FsFuture<'a, Box<dyn DavMetaData>> {
+    fn metadata(&mut self) -> FsFuture<'_, Box<dyn DavMetaData>> {
         let len = self.data.len() as u64;
         async move {
             Ok(Box::new(MdpMetaData {
@@ -646,7 +656,7 @@ impl DavFile for MdpWriteFile {
         .boxed()
     }
 
-    fn write_buf<'a>(&'a mut self, buf: Box<dyn bytes::Buf + Send>) -> FsFuture<'a, ()> {
+    fn write_buf(&mut self, buf: Box<dyn bytes::Buf + Send>) -> FsFuture<'_, ()> {
         let chunk = buf.chunk().to_vec();
         self.data.extend_from_slice(&chunk);
         async { Ok(()) }.boxed()
@@ -680,10 +690,10 @@ impl DavFile for MdpWriteFile {
             }
 
             let file_id = Uuid::new_v4();
+            #[allow(clippy::cast_possible_wrap)]
             let size = data.len() as i64;
             let storage_key = mdp_storage::storage_key::file(user_id, file_id);
 
-            use sha2::{Digest, Sha256};
             let mut hasher = Sha256::new();
             hasher.update(&data);
             let hash = hex::encode(hasher.finalize());
