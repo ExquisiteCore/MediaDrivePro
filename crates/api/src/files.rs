@@ -3,11 +3,12 @@ use axum::{
     http::{header, StatusCode},
     response::IntoResponse,
     routing::{get, post},
-    Router,
+    Json, Router,
 };
 use mdp_auth::middleware::AuthUser;
 use mdp_common::{error::AppError, response::ApiResponse};
 use mdp_core::file::{FileInfo, FileListQuery, FileService};
+use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::state::AppState;
@@ -15,7 +16,7 @@ use crate::state::AppState;
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/files", post(upload).get(list))
-        .route("/files/{id}", get(get_file).delete(delete_file))
+        .route("/files/{id}", get(get_file).put(update_file).delete(delete_file))
         .route("/files/{id}/download", get(download))
 }
 
@@ -126,4 +127,29 @@ async fn delete_file(
 ) -> Result<StatusCode, AppError> {
     FileService::delete(&state.db, &state.storage, auth.user_id, id).await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Deserialize)]
+struct UpdateFileRequest {
+    name: Option<String>,
+    /// Use null to move to root, or a UUID to move to a folder.
+    /// Omit the field entirely to keep the current folder.
+    folder_id: Option<Option<Uuid>>,
+}
+
+async fn update_file(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<Uuid>,
+    Json(req): Json<UpdateFileRequest>,
+) -> Result<ApiResponse<FileInfo>, AppError> {
+    let info = FileService::rename_move(
+        &state.db,
+        auth.user_id,
+        id,
+        req.name.as_deref(),
+        req.folder_id,
+    )
+    .await?;
+    Ok(ApiResponse::ok(info))
 }

@@ -166,4 +166,48 @@ impl FolderService {
 
         Ok(())
     }
+
+    /// Rename and/or move a folder to another parent.
+    pub async fn rename_move(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        folder_id: Uuid,
+        new_name: Option<&str>,
+        new_parent_id: Option<Option<Uuid>>,
+    ) -> Result<FolderInfo, AppError> {
+        let folder = folders::Entity::find_by_id(folder_id)
+            .filter(folders::Column::UserId.eq(user_id))
+            .one(db)
+            .await?
+            .ok_or(AppError::NotFound("目录不存在".to_string()))?;
+
+        let mut active: folders::ActiveModel = folder.into();
+
+        if let Some(name) = new_name {
+            if name.is_empty() || name.len() > 255 {
+                return Err(AppError::Validation("目录名长度需在 1-255 之间".to_string()));
+            }
+            active.name = Set(name.to_string());
+        }
+
+        if let Some(parent_id) = new_parent_id {
+            // Cannot move a folder into itself
+            if parent_id == Some(folder_id) {
+                return Err(AppError::Validation("不能将目录移动到自身".to_string()));
+            }
+            // Verify target parent exists and belongs to user
+            if let Some(pid) = parent_id {
+                folders::Entity::find_by_id(pid)
+                    .filter(folders::Column::UserId.eq(user_id))
+                    .one(db)
+                    .await?
+                    .ok_or(AppError::NotFound("目标父目录不存在".to_string()))?;
+            }
+            active.parent_id = Set(parent_id);
+        }
+
+        active.updated_at = Set(Utc::now());
+        let updated = active.update(db).await?;
+        Ok(updated.into())
+    }
 }

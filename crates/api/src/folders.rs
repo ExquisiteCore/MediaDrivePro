@@ -15,7 +15,7 @@ use crate::state::AppState;
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/folders", post(create).get(list_root))
-        .route("/folders/{id}", get(get_folder).delete(delete_folder))
+        .route("/folders/{id}", get(get_folder).put(update_folder).delete(delete_folder))
         .route("/folders/{id}/children", get(list_children))
 }
 
@@ -68,4 +68,27 @@ async fn delete_folder(
 ) -> Result<StatusCode, AppError> {
     FolderService::delete(&state.db, auth.user_id, id).await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Deserialize)]
+struct UpdateFolderRequest {
+    name: Option<String>,
+    parent_id: Option<Option<Uuid>>,
+}
+
+async fn update_folder(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<Uuid>,
+    Json(req): Json<UpdateFolderRequest>,
+) -> Result<ApiResponse<FolderInfo>, AppError> {
+    let folder = FolderService::rename_move(
+        &state.db,
+        auth.user_id,
+        id,
+        req.name.as_deref(),
+        req.parent_id,
+    )
+    .await?;
+    Ok(ApiResponse::ok(folder))
 }
