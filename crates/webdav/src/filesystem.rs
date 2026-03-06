@@ -110,12 +110,12 @@ impl DavFile for MdpOpenFile {
         async { Ok(()) }.boxed()
     }
 
-    fn write_bytes(&mut self, buf: bytes::Bytes) -> FsFuture<()> {
+    fn write_bytes(&mut self, buf: bytes::Bytes) -> FsFuture<'_, ()> {
         self.data.extend_from_slice(&buf);
         async { Ok(()) }.boxed()
     }
 
-    fn read_bytes(&mut self, count: usize) -> FsFuture<bytes::Bytes> {
+    fn read_bytes(&mut self, count: usize) -> FsFuture<'_, bytes::Bytes> {
         let end = (self.pos + count).min(self.data.len());
         let slice = &self.data[self.pos..end];
         let b = bytes::Bytes::copy_from_slice(slice);
@@ -123,7 +123,7 @@ impl DavFile for MdpOpenFile {
         async move { Ok(b) }.boxed()
     }
 
-    fn seek(&mut self, pos: io::SeekFrom) -> FsFuture<u64> {
+    fn seek(&mut self, pos: io::SeekFrom) -> FsFuture<'_, u64> {
         let new_pos = match pos {
             io::SeekFrom::Start(n) => n as i64,
             io::SeekFrom::End(n) => self.data.len() as i64 + n,
@@ -136,7 +136,7 @@ impl DavFile for MdpOpenFile {
         async move { Ok(new_pos as u64) }.boxed()
     }
 
-    fn flush(&mut self) -> FsFuture<()> {
+    fn flush(&mut self) -> FsFuture<'_, ()> {
         async { Ok(()) }.boxed()
     }
 }
@@ -652,20 +652,20 @@ impl DavFile for MdpWriteFile {
         async { Ok(()) }.boxed()
     }
 
-    fn write_bytes(&mut self, buf: bytes::Bytes) -> FsFuture<()> {
+    fn write_bytes(&mut self, buf: bytes::Bytes) -> FsFuture<'_, ()> {
         self.data.extend_from_slice(&buf);
         async { Ok(()) }.boxed()
     }
 
-    fn read_bytes(&mut self, _count: usize) -> FsFuture<bytes::Bytes> {
+    fn read_bytes(&mut self, _count: usize) -> FsFuture<'_, bytes::Bytes> {
         async { Err(FsError::NotImplemented) }.boxed()
     }
 
-    fn seek(&mut self, _pos: io::SeekFrom) -> FsFuture<u64> {
+    fn seek(&mut self, _pos: io::SeekFrom) -> FsFuture<'_, u64> {
         async { Err(FsError::NotImplemented) }.boxed()
     }
 
-    fn flush(&mut self) -> FsFuture<()> {
+    fn flush(&mut self) -> FsFuture<'_, ()> {
         let db = self.db.clone();
         let storage = self.storage.clone();
         let user_id = self.user_id;
