@@ -7,7 +7,8 @@ use axum::{
     http::{Request, Response, StatusCode},
     response::IntoResponse,
 };
-use dav_server::DavHandler;
+use dav_server::{DavConfig, DavHandler};
+use http_body_util::BodyStream;
 use opendal::Operator;
 use sea_orm::DatabaseConnection;
 
@@ -53,15 +54,15 @@ pub async fn webdav_handler(
 
     let dav_handler = DavHandler::builder()
         .filesystem(Box::new(fs))
-        .strip_prefix("/dav")
         .build_handler();
 
-    // Convert axum Request to dav-server compatible request
-    match dav_handler.handle(req).await {
-        Ok(resp) => resp,
-        Err(_) => Response::builder()
-            .status(StatusCode::INTERNAL_SERVER_ERROR)
-            .body(Body::from("WebDAV error"))
-            .unwrap(),
-    }
+    // Use handle_with to pass strip_prefix config per-request
+    let config = DavConfig::new().strip_prefix("/dav");
+
+    let dav_resp = dav_handler.handle_with(config, req).await;
+
+    // Convert dav_server::body::Body to axum::body::Body
+    let (parts, dav_body) = dav_resp.into_parts();
+    let axum_body = Body::from_stream(BodyStream::new(dav_body));
+    Response::from_parts(parts, axum_body)
 }

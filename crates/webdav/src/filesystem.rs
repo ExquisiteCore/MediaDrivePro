@@ -10,7 +10,7 @@ use uuid::Uuid;
 use mdp_core::entity::{files, folders};
 
 /// A WebDAV filesystem backed by SeaORM (metadata) + OpenDAL (data).
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct MdpDavFs {
     db: DatabaseConnection,
     storage: Operator,
@@ -43,13 +43,12 @@ enum ResolvedPath {
 }
 
 /// Metadata wrapper for files and folders.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct MdpMetaData {
     is_dir: bool,
     len: u64,
     modified: std::time::SystemTime,
     created: std::time::SystemTime,
-    name: String,
 }
 
 impl DavMetaData for MdpMetaData {
@@ -68,6 +67,7 @@ impl DavMetaData for MdpMetaData {
 }
 
 /// Directory entry for listing.
+#[derive(Debug)]
 struct MdpDirEntry {
     meta: MdpMetaData,
     name: String,
@@ -77,20 +77,21 @@ impl DavDirEntry for MdpDirEntry {
     fn name(&self) -> Vec<u8> {
         self.name.clone().into_bytes()
     }
-    fn metadata(&self) -> FsFuture<Box<dyn DavMetaData>> {
+    fn metadata<'a>(&'a self) -> FsFuture<'a, Box<dyn DavMetaData>> {
         let meta = self.meta.clone();
         async move { Ok(Box::new(meta) as Box<dyn DavMetaData>) }.boxed()
     }
 }
 
-/// An open file for reading/writing.
+/// An open file for reading.
+#[derive(Debug)]
 struct MdpOpenFile {
     data: Vec<u8>,
     pos: usize,
 }
 
 impl DavFile for MdpOpenFile {
-    fn metadata(&mut self) -> FsFuture<Box<dyn DavMetaData>> {
+    fn metadata<'a>(&'a mut self) -> FsFuture<'a, Box<dyn DavMetaData>> {
         let len = self.data.len() as u64;
         async move {
             Ok(Box::new(MdpMetaData {
@@ -98,13 +99,12 @@ impl DavFile for MdpOpenFile {
                 len,
                 modified: std::time::SystemTime::now(),
                 created: std::time::SystemTime::now(),
-                name: String::new(),
             }) as Box<dyn DavMetaData>)
         }
         .boxed()
     }
 
-    fn write_buf(&mut self, buf: Box<dyn bytes::Buf + Send>) -> FsFuture<()> {
+    fn write_buf<'a>(&'a mut self, buf: Box<dyn bytes::Buf + Send>) -> FsFuture<'a, ()> {
         let chunk = buf.chunk().to_vec();
         self.data.extend_from_slice(&chunk);
         async { Ok(()) }.boxed()
@@ -118,9 +118,9 @@ impl DavFile for MdpOpenFile {
     fn read_bytes(&mut self, count: usize) -> FsFuture<bytes::Bytes> {
         let end = (self.pos + count).min(self.data.len());
         let slice = &self.data[self.pos..end];
-        let bytes = bytes::Bytes::copy_from_slice(slice);
+        let b = bytes::Bytes::copy_from_slice(slice);
         self.pos = end;
-        async move { Ok(bytes) }.boxed()
+        async move { Ok(b) }.boxed()
     }
 
     fn seek(&mut self, pos: io::SeekFrom) -> FsFuture<u64> {
@@ -147,7 +147,6 @@ fn to_system_time(dt: chrono::DateTime<Utc>) -> std::time::SystemTime {
 
 impl MdpDavFs {
     /// Resolve a WebDAV path to our DB entities.
-    /// Path components: /segment1/segment2/.../segmentN
     async fn resolve_path(&self, path: &DavPath) -> ResolvedPath {
         let path_str = path.as_url_string();
         let path_str = path_str.trim_start_matches('/');
@@ -157,16 +156,20 @@ impl MdpDavFs {
             return ResolvedPath::Root;
         }
 
-        let segments: Vec<&str> = path_str.trim_end_matches('/').split('/').collect();
+        let segments: Vec<&str> = path_str
+            .trim_end_matches('/')
+            .split('/')
+            .filter(|s| !s.is_empty())
+            .collect();
         let is_dir_hint = path_str.ends_with('/');
 
-        // Walk path segments: each segment is a folder name, except possibly the last
+        if segments.is_empty() {
+            return ResolvedPath::Root;
+        }
+
         let mut parent_id: Option<Uuid> = None;
 
         for (i, segment) in segments.iter().enumerate() {
-            if segment.is_empty() {
-                continue;
-            }
             let is_last = i == segments.len() - 1;
 
             // Try to find a folder with this name
@@ -188,7 +191,7 @@ impl MdpDavFs {
                 continue;
             }
 
-            // If last segment and not a folder, try file
+            // If last segment and not a folder hint, try file
             if is_last && !is_dir_hint {
                 let mut file_query = files::Entity::find()
                     .filter(files::Column::UserId.eq(self.user_id))
@@ -212,7 +215,7 @@ impl MdpDavFs {
         ResolvedPath::Root
     }
 
-    /// Get the parent folder_id for a given path (the parent of the last segment).
+    /// Get the parent folder_id for a given path.
     async fn resolve_parent(&self, path: &DavPath) -> Result<Option<Uuid>, FsError> {
         let path_str = path.as_url_string();
         let path_str = path_str.trim_start_matches('/');
@@ -224,10 +227,9 @@ impl MdpDavFs {
             .collect();
 
         if segments.len() <= 1 {
-            return Ok(None); // parent is root
+            return Ok(None);
         }
 
-        // Walk all but the last segment
         let mut parent_id: Option<Uuid> = None;
         for segment in &segments[..segments.len() - 1] {
             let mut query = folders::Entity::find()
@@ -250,7 +252,6 @@ impl MdpDavFs {
         Ok(parent_id)
     }
 
-    /// Get the last segment (file/folder name) from a path.
     fn last_segment(path: &DavPath) -> String {
         let path_str = path.as_url_string();
         let path_str = path_str.trim_start_matches('/');
@@ -265,18 +266,13 @@ impl MdpDavFs {
 }
 
 fn percent_decode(s: &str) -> String {
-    urlencoding_decode(s)
-}
-
-fn urlencoding_decode(s: &str) -> String {
     let mut result = String::new();
     let mut chars = s.bytes();
     while let Some(b) = chars.next() {
         if b == b'%' {
             let h = chars.next().unwrap_or(b'0');
             let l = chars.next().unwrap_or(b'0');
-            let byte =
-                hex_val(h) * 16 + hex_val(l);
+            let byte = hex_val(h) * 16 + hex_val(l);
             result.push(byte as char);
         } else if b == b'+' {
             result.push(' ');
@@ -296,25 +292,48 @@ fn hex_val(b: u8) -> u8 {
     }
 }
 
+fn mime_from_name(name: &str) -> String {
+    let ext = name.rsplit('.').next().unwrap_or("").to_lowercase();
+    match ext.as_str() {
+        "txt" => "text/plain",
+        "html" | "htm" => "text/html",
+        "css" => "text/css",
+        "js" => "application/javascript",
+        "json" => "application/json",
+        "xml" => "application/xml",
+        "pdf" => "application/pdf",
+        "zip" => "application/zip",
+        "gz" | "gzip" => "application/gzip",
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "svg" => "image/svg+xml",
+        "mp4" => "video/mp4",
+        "mkv" => "video/x-matroska",
+        "mp3" => "audio/mpeg",
+        "wav" => "audio/wav",
+        _ => "application/octet-stream",
+    }
+    .to_string()
+}
+
 impl DavFileSystem for MdpDavFs {
     fn open<'a>(
         &'a self,
         path: &'a DavPath,
         options: OpenOptions,
-    ) -> FsFuture<Box<dyn DavFile>> {
-        let path = path.clone();
-        let fs = self.clone();
-
+    ) -> FsFuture<'a, Box<dyn DavFile>> {
         async move {
-            let name = Self::last_segment(&path);
+            let name = Self::last_segment(path);
 
             if options.write && options.create {
-                // PUT (create/overwrite file)
-                let parent_id = fs.resolve_parent(&path).await?;
+                // PUT — create/overwrite file
+                let parent_id = self.resolve_parent(path).await?;
 
-                // Check if file exists
+                // Check if file already exists, delete it
                 let mut query = files::Entity::find()
-                    .filter(files::Column::UserId.eq(fs.user_id))
+                    .filter(files::Column::UserId.eq(self.user_id))
                     .filter(files::Column::Name.eq(&name))
                     .filter(files::Column::Status.ne("deleted"));
                 if let Some(pid) = parent_id {
@@ -322,36 +341,31 @@ impl DavFileSystem for MdpDavFs {
                 } else {
                     query = query.filter(files::Column::FolderId.is_null());
                 }
-
-                if let Ok(Some(existing)) = query.one(&fs.db).await {
-                    // Delete existing file from storage
-                    fs.storage
+                if let Ok(Some(existing)) = query.one(&self.db).await {
+                    self.storage
                         .delete(&existing.storage_key)
                         .await
                         .map_err(|_| FsError::GeneralFailure)?;
                     existing
-                        .delete(&fs.db)
+                        .delete(&self.db)
                         .await
                         .map_err(|_| FsError::GeneralFailure)?;
                 }
 
-                // Return an empty file that will accumulate write data.
-                // The actual storage write happens in flush/close — but dav-server
-                // expects us to handle it. We use a WriteFile wrapper.
                 Ok(Box::new(MdpWriteFile {
-                    db: fs.db.clone(),
-                    storage: fs.storage.clone(),
-                    user_id: fs.user_id,
+                    db: self.db.clone(),
+                    storage: self.storage.clone(),
+                    user_id: self.user_id,
                     folder_id: parent_id,
                     file_name: name,
-                    storage_backend: fs.storage_backend.clone(),
+                    storage_backend: self.storage_backend.clone(),
                     data: Vec::new(),
                 }) as Box<dyn DavFile>)
             } else {
-                // GET (read file)
-                match fs.resolve_path(&path).await {
+                // GET — read file
+                match self.resolve_path(path).await {
                     ResolvedPath::File(file) => {
-                        let data = fs
+                        let data = self
                             .storage
                             .read(&file.storage_key)
                             .await
@@ -370,12 +384,9 @@ impl DavFileSystem for MdpDavFs {
         &'a self,
         path: &'a DavPath,
         _meta: ReadDirMeta,
-    ) -> FsFuture<FsStream> {
-        let path = path.clone();
-        let fs = self.clone();
-
+    ) -> FsFuture<'a, FsStream<Box<dyn DavDirEntry>>> {
         async move {
-            let folder_id = match fs.resolve_path(&path).await {
+            let folder_id = match self.resolve_path(path).await {
                 ResolvedPath::Root => None,
                 ResolvedPath::Folder(f) => Some(f.id),
                 _ => return Err(FsError::NotFound),
@@ -385,13 +396,13 @@ impl DavFileSystem for MdpDavFs {
 
             // Sub-folders
             let mut fq = folders::Entity::find()
-                .filter(folders::Column::UserId.eq(fs.user_id));
+                .filter(folders::Column::UserId.eq(self.user_id));
             if let Some(fid) = folder_id {
                 fq = fq.filter(folders::Column::ParentId.eq(fid));
             } else {
                 fq = fq.filter(folders::Column::ParentId.is_null());
             }
-            if let Ok(folders_list) = fq.all(&fs.db).await {
+            if let Ok(folders_list) = fq.all(&self.db).await {
                 for f in folders_list {
                     entries.push(Box::new(MdpDirEntry {
                         name: f.name.clone(),
@@ -400,7 +411,6 @@ impl DavFileSystem for MdpDavFs {
                             len: 0,
                             modified: to_system_time(f.updated_at),
                             created: to_system_time(f.created_at),
-                            name: f.name,
                         },
                     }));
                 }
@@ -408,14 +418,14 @@ impl DavFileSystem for MdpDavFs {
 
             // Files
             let mut fileq = files::Entity::find()
-                .filter(files::Column::UserId.eq(fs.user_id))
+                .filter(files::Column::UserId.eq(self.user_id))
                 .filter(files::Column::Status.ne("deleted"));
             if let Some(fid) = folder_id {
                 fileq = fileq.filter(files::Column::FolderId.eq(fid));
             } else {
                 fileq = fileq.filter(files::Column::FolderId.is_null());
             }
-            if let Ok(files_list) = fileq.all(&fs.db).await {
+            if let Ok(files_list) = fileq.all(&self.db).await {
                 for f in files_list {
                     entries.push(Box::new(MdpDirEntry {
                         name: f.name.clone(),
@@ -424,46 +434,37 @@ impl DavFileSystem for MdpDavFs {
                             len: f.size as u64,
                             modified: to_system_time(f.updated_at),
                             created: to_system_time(f.created_at),
-                            name: f.name,
                         },
                     }));
                 }
             }
 
-            let stream = futures::stream::iter(
-                entries.into_iter().map(Ok),
-            );
-            Ok(Box::pin(stream) as FsStream)
+            let stream = futures::stream::iter(entries.into_iter().map(Ok));
+            Ok(Box::pin(stream) as FsStream<Box<dyn DavDirEntry>>)
         }
         .boxed()
     }
 
-    fn metadata<'a>(&'a self, path: &'a DavPath) -> FsFuture<Box<dyn DavMetaData>> {
-        let path = path.clone();
-        let fs = self.clone();
-
+    fn metadata<'a>(&'a self, path: &'a DavPath) -> FsFuture<'a, Box<dyn DavMetaData>> {
         async move {
-            match fs.resolve_path(&path).await {
+            match self.resolve_path(path).await {
                 ResolvedPath::Root => Ok(Box::new(MdpMetaData {
                     is_dir: true,
                     len: 0,
                     modified: std::time::SystemTime::now(),
                     created: std::time::SystemTime::now(),
-                    name: String::new(),
                 }) as Box<dyn DavMetaData>),
                 ResolvedPath::Folder(f) => Ok(Box::new(MdpMetaData {
                     is_dir: true,
                     len: 0,
                     modified: to_system_time(f.updated_at),
                     created: to_system_time(f.created_at),
-                    name: f.name,
                 }) as Box<dyn DavMetaData>),
                 ResolvedPath::File(f) => Ok(Box::new(MdpMetaData {
                     is_dir: false,
                     len: f.size as u64,
                     modified: to_system_time(f.updated_at),
                     created: to_system_time(f.created_at),
-                    name: f.name,
                 }) as Box<dyn DavMetaData>),
                 ResolvedPath::NotFound => Err(FsError::NotFound),
             }
@@ -471,28 +472,25 @@ impl DavFileSystem for MdpDavFs {
         .boxed()
     }
 
-    fn create_dir<'a>(&'a self, path: &'a DavPath) -> FsFuture<()> {
-        let path = path.clone();
-        let fs = self.clone();
-
+    fn create_dir<'a>(&'a self, path: &'a DavPath) -> FsFuture<'a, ()> {
         async move {
-            let name = Self::last_segment(&path);
+            let name = Self::last_segment(path);
             if name.is_empty() {
                 return Err(FsError::Forbidden);
             }
-            let parent_id = fs.resolve_parent(&path).await?;
+            let parent_id = self.resolve_parent(path).await?;
 
             let now = Utc::now();
             let folder = folders::ActiveModel {
-                id: sea_orm::Set(Uuid::new_v4()),
-                user_id: sea_orm::Set(fs.user_id),
-                parent_id: sea_orm::Set(parent_id),
-                name: sea_orm::Set(name),
-                created_at: sea_orm::Set(now),
-                updated_at: sea_orm::Set(now),
+                id: Set(Uuid::new_v4()),
+                user_id: Set(self.user_id),
+                parent_id: Set(parent_id),
+                name: Set(name),
+                created_at: Set(now),
+                updated_at: Set(now),
             };
             folder
-                .insert(&fs.db)
+                .insert(&self.db)
                 .await
                 .map_err(|_| FsError::Exists)?;
             Ok(())
@@ -500,14 +498,11 @@ impl DavFileSystem for MdpDavFs {
         .boxed()
     }
 
-    fn remove_dir<'a>(&'a self, path: &'a DavPath) -> FsFuture<()> {
-        let path = path.clone();
-        let fs = self.clone();
-
+    fn remove_dir<'a>(&'a self, path: &'a DavPath) -> FsFuture<'a, ()> {
         async move {
-            match fs.resolve_path(&path).await {
+            match self.resolve_path(path).await {
                 ResolvedPath::Folder(f) => {
-                    f.delete(&fs.db)
+                    f.delete(&self.db)
                         .await
                         .map_err(|_| FsError::GeneralFailure)?;
                     Ok(())
@@ -518,24 +513,19 @@ impl DavFileSystem for MdpDavFs {
         .boxed()
     }
 
-    fn remove_file<'a>(&'a self, path: &'a DavPath) -> FsFuture<()> {
-        let path = path.clone();
-        let fs = self.clone();
-
+    fn remove_file<'a>(&'a self, path: &'a DavPath) -> FsFuture<'a, ()> {
         async move {
-            match fs.resolve_path(&path).await {
+            match self.resolve_path(path).await {
                 ResolvedPath::File(file) => {
-                    // Delete from storage
-                    fs.storage
+                    self.storage
                         .delete(&file.storage_key)
                         .await
                         .map_err(|_| FsError::GeneralFailure)?;
-                    // Mark as deleted
                     let mut active: files::ActiveModel = file.into();
-                    active.status = sea_orm::Set("deleted".to_string());
-                    active.updated_at = sea_orm::Set(Utc::now());
+                    active.status = Set("deleted".to_string());
+                    active.updated_at = Set(Utc::now());
                     active
-                        .update(&fs.db)
+                        .update(&self.db)
                         .await
                         .map_err(|_| FsError::GeneralFailure)?;
                     Ok(())
@@ -546,38 +536,30 @@ impl DavFileSystem for MdpDavFs {
         .boxed()
     }
 
-    fn rename<'a>(
-        &'a self,
-        from: &'a DavPath,
-        to: &'a DavPath,
-    ) -> FsFuture<()> {
-        let from = from.clone();
-        let to = to.clone();
-        let fs = self.clone();
-
+    fn rename<'a>(&'a self, from: &'a DavPath, to: &'a DavPath) -> FsFuture<'a, ()> {
         async move {
-            let new_name = Self::last_segment(&to);
-            let new_parent = fs.resolve_parent(&to).await?;
+            let new_name = Self::last_segment(to);
+            let new_parent = self.resolve_parent(to).await?;
 
-            match fs.resolve_path(&from).await {
+            match self.resolve_path(from).await {
                 ResolvedPath::Folder(folder) => {
                     let mut active: folders::ActiveModel = folder.into();
-                    active.name = sea_orm::Set(new_name);
-                    active.parent_id = sea_orm::Set(new_parent);
-                    active.updated_at = sea_orm::Set(Utc::now());
+                    active.name = Set(new_name);
+                    active.parent_id = Set(new_parent);
+                    active.updated_at = Set(Utc::now());
                     active
-                        .update(&fs.db)
+                        .update(&self.db)
                         .await
                         .map_err(|_| FsError::GeneralFailure)?;
                     Ok(())
                 }
                 ResolvedPath::File(file) => {
                     let mut active: files::ActiveModel = file.into();
-                    active.name = sea_orm::Set(new_name);
-                    active.folder_id = sea_orm::Set(new_parent);
-                    active.updated_at = sea_orm::Set(Utc::now());
+                    active.name = Set(new_name);
+                    active.folder_id = Set(new_parent);
+                    active.updated_at = Set(Utc::now());
                     active
-                        .update(&fs.db)
+                        .update(&self.db)
                         .await
                         .map_err(|_| FsError::GeneralFailure)?;
                     Ok(())
@@ -588,57 +570,45 @@ impl DavFileSystem for MdpDavFs {
         .boxed()
     }
 
-    fn copy<'a>(
-        &'a self,
-        from: &'a DavPath,
-        to: &'a DavPath,
-    ) -> FsFuture<()> {
-        let from = from.clone();
-        let to = to.clone();
-        let fs = self.clone();
-
+    fn copy<'a>(&'a self, from: &'a DavPath, to: &'a DavPath) -> FsFuture<'a, ()> {
         async move {
-            match fs.resolve_path(&from).await {
+            match self.resolve_path(from).await {
                 ResolvedPath::File(src_file) => {
-                    let new_name = Self::last_segment(&to);
-                    let new_parent = fs.resolve_parent(&to).await?;
+                    let new_name = Self::last_segment(to);
+                    let new_parent = self.resolve_parent(to).await?;
 
-                    // Read source data
-                    let data = fs
+                    let data = self
                         .storage
                         .read(&src_file.storage_key)
                         .await
                         .map_err(|_| FsError::GeneralFailure)?
                         .to_vec();
 
-                    // Create new file
                     let file_id = Uuid::new_v4();
                     let storage_key =
-                        mdp_storage::storage_key::file(fs.user_id, file_id);
-                    fs.storage
+                        mdp_storage::storage_key::file(self.user_id, file_id);
+                    self.storage
                         .write(&storage_key, data)
                         .await
                         .map_err(|_| FsError::GeneralFailure)?;
 
                     let now = Utc::now();
                     let new_file = files::ActiveModel {
-                        id: sea_orm::Set(file_id),
-                        user_id: sea_orm::Set(fs.user_id),
-                        folder_id: sea_orm::Set(new_parent),
-                        name: sea_orm::Set(new_name),
-                        storage_key: sea_orm::Set(storage_key),
-                        size: sea_orm::Set(src_file.size),
-                        content_type: sea_orm::Set(src_file.content_type.clone()),
-                        hash_sha256: sea_orm::Set(src_file.hash_sha256.clone()),
-                        storage_backend: sea_orm::Set(
-                            src_file.storage_backend.clone(),
-                        ),
-                        status: sea_orm::Set("active".to_string()),
-                        created_at: sea_orm::Set(now),
-                        updated_at: sea_orm::Set(now),
+                        id: Set(file_id),
+                        user_id: Set(self.user_id),
+                        folder_id: Set(new_parent),
+                        name: Set(new_name),
+                        storage_key: Set(storage_key),
+                        size: Set(src_file.size),
+                        content_type: Set(src_file.content_type.clone()),
+                        hash_sha256: Set(src_file.hash_sha256.clone()),
+                        storage_backend: Set(src_file.storage_backend.clone()),
+                        status: Set("active".to_string()),
+                        created_at: Set(now),
+                        updated_at: Set(now),
                     };
                     new_file
-                        .insert(&fs.db)
+                        .insert(&self.db)
                         .await
                         .map_err(|_| FsError::GeneralFailure)?;
                     Ok(())
@@ -650,7 +620,8 @@ impl DavFileSystem for MdpDavFs {
     }
 }
 
-/// A write-only file handle. Accumulates data and writes to storage on flush.
+/// A write-only file handle for WebDAV PUT. Writes to storage on flush.
+#[derive(Debug)]
 struct MdpWriteFile {
     db: DatabaseConnection,
     storage: Operator,
@@ -662,7 +633,7 @@ struct MdpWriteFile {
 }
 
 impl DavFile for MdpWriteFile {
-    fn metadata(&mut self) -> FsFuture<Box<dyn DavMetaData>> {
+    fn metadata<'a>(&'a mut self) -> FsFuture<'a, Box<dyn DavMetaData>> {
         let len = self.data.len() as u64;
         async move {
             Ok(Box::new(MdpMetaData {
@@ -670,13 +641,12 @@ impl DavFile for MdpWriteFile {
                 len,
                 modified: std::time::SystemTime::now(),
                 created: std::time::SystemTime::now(),
-                name: String::new(),
             }) as Box<dyn DavMetaData>)
         }
         .boxed()
     }
 
-    fn write_buf(&mut self, buf: Box<dyn bytes::Buf + Send>) -> FsFuture<()> {
+    fn write_buf<'a>(&'a mut self, buf: Box<dyn bytes::Buf + Send>) -> FsFuture<'a, ()> {
         let chunk = buf.chunk().to_vec();
         self.data.extend_from_slice(&chunk);
         async { Ok(()) }.boxed()
@@ -696,7 +666,6 @@ impl DavFile for MdpWriteFile {
     }
 
     fn flush(&mut self) -> FsFuture<()> {
-        // Write file to storage and DB
         let db = self.db.clone();
         let storage = self.storage.clone();
         let user_id = self.user_id;
@@ -714,16 +683,13 @@ impl DavFile for MdpWriteFile {
             let size = data.len() as i64;
             let storage_key = mdp_storage::storage_key::file(user_id, file_id);
 
-            // Compute hash
             use sha2::{Digest, Sha256};
             let mut hasher = Sha256::new();
             hasher.update(&data);
             let hash = hex::encode(hasher.finalize());
 
-            // Guess content type
             let content_type = mime_from_name(&file_name);
 
-            // Write to storage
             storage
                 .write(&storage_key, data)
                 .await
@@ -731,18 +697,18 @@ impl DavFile for MdpWriteFile {
 
             let now = Utc::now();
             let file = files::ActiveModel {
-                id: sea_orm::Set(file_id),
-                user_id: sea_orm::Set(user_id),
-                folder_id: sea_orm::Set(folder_id),
-                name: sea_orm::Set(file_name),
-                storage_key: sea_orm::Set(storage_key),
-                size: sea_orm::Set(size),
-                content_type: sea_orm::Set(content_type),
-                hash_sha256: sea_orm::Set(hash),
-                storage_backend: sea_orm::Set(backend),
-                status: sea_orm::Set("active".to_string()),
-                created_at: sea_orm::Set(now),
-                updated_at: sea_orm::Set(now),
+                id: Set(file_id),
+                user_id: Set(user_id),
+                folder_id: Set(folder_id),
+                name: Set(file_name),
+                storage_key: Set(storage_key),
+                size: Set(size),
+                content_type: Set(content_type),
+                hash_sha256: Set(hash),
+                storage_backend: Set(backend),
+                status: Set("active".to_string()),
+                created_at: Set(now),
+                updated_at: Set(now),
             };
             file.insert(&db)
                 .await
@@ -752,33 +718,4 @@ impl DavFile for MdpWriteFile {
         }
         .boxed()
     }
-}
-
-fn mime_from_name(name: &str) -> String {
-    let ext = name.rsplit('.').next().unwrap_or("").to_lowercase();
-    match ext.as_str() {
-        "txt" => "text/plain",
-        "html" | "htm" => "text/html",
-        "css" => "text/css",
-        "js" => "application/javascript",
-        "json" => "application/json",
-        "xml" => "application/xml",
-        "pdf" => "application/pdf",
-        "zip" => "application/zip",
-        "gz" | "gzip" => "application/gzip",
-        "tar" => "application/x-tar",
-        "png" => "image/png",
-        "jpg" | "jpeg" => "image/jpeg",
-        "gif" => "image/gif",
-        "webp" => "image/webp",
-        "svg" => "image/svg+xml",
-        "mp4" => "video/mp4",
-        "mkv" => "video/x-matroska",
-        "avi" => "video/x-msvideo",
-        "mp3" => "audio/mpeg",
-        "wav" => "audio/wav",
-        "flac" => "audio/flac",
-        _ => "application/octet-stream",
-    }
-    .to_string()
 }
