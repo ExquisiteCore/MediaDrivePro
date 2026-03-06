@@ -7,7 +7,7 @@ use axum::{
     http::{Request, Response, StatusCode},
     response::IntoResponse,
 };
-use dav_server::{DavConfig, DavHandler};
+use dav_server::DavHandler;
 use http_body_util::BodyExt;
 use opendal::Operator;
 use sea_orm::DatabaseConnection;
@@ -22,10 +22,15 @@ pub struct WebDavState {
 }
 
 /// Axum handler that processes all WebDAV requests under /dav/.
+/// Mounted via `nest("/dav", ...)` so the prefix is already stripped.
 pub async fn webdav_handler(
     State(state): State<WebDavState>,
     req: Request<Body>,
 ) -> impl IntoResponse {
+    let method = req.method().clone();
+    let uri = req.uri().clone();
+    tracing::debug!("WebDAV request: {method} {uri}");
+
     // Extract Basic Auth
     let auth_header = req
         .headers()
@@ -44,6 +49,8 @@ pub async fn webdav_handler(
         }
     };
 
+    tracing::debug!("WebDAV auth OK for user {user_id}");
+
     // Create a per-user DavFileSystem
     let fs = MdpDavFs::new(
         state.db.clone(),
@@ -56,17 +63,25 @@ pub async fn webdav_handler(
         .filesystem(Box::new(fs))
         .build_handler();
 
-    let config = DavConfig::new().strip_prefix("/dav");
+    // No strip_prefix needed — nest() already stripped "/dav"
+    let dav_resp = dav_handler.handle(req).await;
 
-    let dav_resp = dav_handler.handle_with(config, req).await;
+    tracing::debug!("WebDAV dav-server responded: {}", dav_resp.status());
 
     // Convert dav_server::body::Body → axum::body::Body
-    // dav body implements HttpBody<Data=Bytes, Error=io::Error>
-    // We need to collect it and convert
+    // Collect the full body to avoid streaming conversion issues
     let (parts, dav_body) = dav_resp.into_parts();
-    let mapped = dav_body.map_err(|e| {
-        axum::Error::new(e)
-    });
-    let axum_body = Body::new(mapped);
-    Response::from_parts(parts, axum_body)
+    match BodyExt::collect(dav_body).await {
+        Ok(collected) => {
+            let body = Body::from(collected.to_bytes());
+            Response::from_parts(parts, body)
+        }
+        Err(e) => {
+            tracing::error!("WebDAV body collect error: {e}");
+            Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(Body::from("Internal Server Error"))
+                .unwrap()
+        }
+    }
 }

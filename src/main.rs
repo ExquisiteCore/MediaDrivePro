@@ -76,11 +76,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             storage,
             storage_backend: config.storage.backend.clone(),
         };
-        app = app.nest_service(
-            &config.webdav.prefix,
-            axum::routing::any(mdp_webdav::webdav_handler)
-                .with_state(webdav_state),
-        );
+        let webdav_router = axum::Router::new()
+            .fallback(mdp_webdav::webdav_handler)
+            .with_state(webdav_state);
+        app = app.nest(&config.webdav.prefix, webdav_router);
         tracing::info!("WebDAV enabled at {}", config.webdav.prefix);
     }
 
