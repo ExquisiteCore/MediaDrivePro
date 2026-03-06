@@ -36,6 +36,12 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.8"
 
+# WebDAV
+dav-server = "0.11"
+headers = "0.4"
+http-body-util = "0.1"
+bytes = "1"
+
 # Utils
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "serde"] }
@@ -46,6 +52,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 sha2 = "0.10"
 hex = "0.4"
 futures = "0.3"
+dashmap = "6"
+rand = "0.9"
+base64 = "0.22"
 
 # Internal crates
 mdp-common = { path = "crates/common" }
@@ -53,6 +62,7 @@ mdp-auth = { path = "crates/auth" }
 mdp-storage = { path = "crates/storage" }
 mdp-core = { path = "crates/core" }
 mdp-api = { path = "crates/api" }
+mdp-webdav = { path = "crates/webdav" }
 migration = { path = "migration" }
 
 [package]
@@ -64,6 +74,7 @@ edition.workspace = true
 mdp-common.workspace = true
 mdp-api.workspace = true
 mdp-storage.workspace = true
+mdp-webdav.workspace = true
 migration.workspace = true
 axum.workspace = true
 sea-orm.workspace = true
@@ -71,3 +82,4 @@ sea-orm-migration = { workspace = true, features = ["runtime-tokio-rustls"] }
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+dashmap.workspace = true

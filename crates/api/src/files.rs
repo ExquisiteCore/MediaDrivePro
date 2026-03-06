@@ -8,6 +8,7 @@ use axum::{
 use mdp_auth::middleware::AuthUser;
 use mdp_common::{error::AppError, response::ApiResponse};
 use mdp_core::file::{FileInfo, FileListQuery, FileService};
+use mdp_core::multipart_upload::{InitResponse, MultipartUploadService, PartResponse};
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -18,6 +19,19 @@ pub fn routes() -> Router<AppState> {
         .route("/files", post(upload).get(list))
         .route("/files/{id}", get(get_file).put(update_file).delete(delete_file))
         .route("/files/{id}/download", get(download))
+        .route("/files/multipart/init", post(multipart_init))
+        .route(
+            "/files/multipart/{upload_id}/{part_number}",
+            axum::routing::put(multipart_upload_part),
+        )
+        .route(
+            "/files/multipart/{upload_id}/complete",
+            post(multipart_complete),
+        )
+        .route(
+            "/files/multipart/{upload_id}",
+            axum::routing::delete(multipart_cancel),
+        )
 }
 
 async fn upload(
@@ -152,4 +166,77 @@ async fn update_file(
     )
     .await?;
     Ok(ApiResponse::ok(info))
+}
+
+// ---- Multipart (chunked) upload handlers ----
+
+#[derive(Deserialize)]
+struct MultipartInitRequest {
+    file_name: String,
+    content_type: Option<String>,
+    folder_id: Option<Uuid>,
+}
+
+async fn multipart_init(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Json(req): Json<MultipartInitRequest>,
+) -> Result<ApiResponse<InitResponse>, AppError> {
+    let resp = MultipartUploadService::init(
+        &state.upload_sessions,
+        auth.user_id,
+        &req.file_name,
+        req.folder_id,
+        req.content_type.as_deref().unwrap_or("application/octet-stream"),
+    )?;
+    Ok(ApiResponse::ok(resp))
+}
+
+#[derive(Deserialize)]
+struct MultipartPathParams {
+    upload_id: String,
+    part_number: u32,
+}
+
+async fn multipart_upload_part(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(params): Path<MultipartPathParams>,
+    body: axum::body::Bytes,
+) -> Result<ApiResponse<PartResponse>, AppError> {
+    let resp = MultipartUploadService::upload_part(
+        &state.upload_sessions,
+        &params.upload_id,
+        params.part_number,
+        auth.user_id,
+        body.to_vec(),
+    )
+    .await?;
+    Ok(ApiResponse::ok(resp))
+}
+
+async fn multipart_complete(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(upload_id): Path<String>,
+) -> Result<ApiResponse<FileInfo>, AppError> {
+    let info = MultipartUploadService::complete(
+        &state.upload_sessions,
+        &state.db,
+        &state.storage,
+        &upload_id,
+        auth.user_id,
+        &state.config.storage.backend,
+    )
+    .await?;
+    Ok(ApiResponse::ok(info))
+}
+
+async fn multipart_cancel(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(upload_id): Path<String>,
+) -> Result<StatusCode, AppError> {
+    MultipartUploadService::cancel(&state.upload_sessions, &upload_id, auth.user_id).await?;
+    Ok(StatusCode::NO_CONTENT)
 }

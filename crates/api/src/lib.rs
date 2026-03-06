@@ -6,6 +6,7 @@ mod auth;
 mod files;
 mod folders;
 mod shares;
+mod tokens;
 pub mod state;
 
 pub fn build_router(state: state::AppState) -> Router {
@@ -13,7 +14,8 @@ pub fn build_router(state: state::AppState) -> Router {
         .merge(auth::routes())
         .merge(files::routes())
         .merge(folders::routes())
-        .merge(shares::routes());
+        .merge(shares::routes())
+        .merge(tokens::routes());
 
     Router::new()
         .nest("/api/v1", api_v1)

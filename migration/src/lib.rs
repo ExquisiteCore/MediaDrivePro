@@ -4,6 +4,7 @@ mod m20250305_000001_create_users_table;
 mod m20250305_000002_create_folders_table;
 mod m20250305_000003_create_files_table;
 mod m20250305_000004_create_shares_table;
+mod m20250306_000005_create_api_tokens_table;
 
 pub struct Migrator;
 
@@ -15,6 +16,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20250305_000002_create_folders_table::Migration),
             Box::new(m20250305_000003_create_files_table::Migration),
             Box::new(m20250305_000004_create_shares_table::Migration),
+            Box::new(m20250306_000005_create_api_tokens_table::Migration),
         ]
     }
 

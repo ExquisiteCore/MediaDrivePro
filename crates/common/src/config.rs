@@ -7,6 +7,8 @@ pub struct AppConfig {
     pub database: DatabaseConfig,
     pub storage: StorageConfig,
     pub auth: AuthConfig,
+    #[serde(default)]
+    pub webdav: WebDavConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -57,6 +59,27 @@ pub struct S3StorageConfig {
 pub struct AuthConfig {
     pub jwt_secret: String,
     pub access_token_ttl_secs: u64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct WebDavConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default = "default_webdav_prefix")]
+    pub prefix: String,
+}
+
+impl Default for WebDavConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            prefix: "/dav".to_string(),
+        }
+    }
+}
+
+fn default_webdav_prefix() -> String {
+    "/dav".to_string()
 }
 
 impl AppConfig {

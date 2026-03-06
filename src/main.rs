@@ -45,13 +45,44 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map_err(|e| format!("Storage init error: {e}"))?;
     tracing::info!("Storage backend '{}' initialized", config.storage.backend);
 
+    // Initialize upload sessions
+    let upload_sessions = mdp_core::multipart_upload::new_sessions();
+
+    // Start background cleanup task for expired upload sessions
+    {
+        let sessions = upload_sessions.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(tokio::time::Duration::from_secs(3600)).await;
+                mdp_core::multipart_upload::MultipartUploadService::cleanup_expired(&sessions)
+                    .await;
+            }
+        });
+    }
+
     // Build application
     let state = mdp_api::state::AppState {
-        db,
-        storage,
+        db: db.clone(),
+        storage: storage.clone(),
         config: config.clone(),
+        upload_sessions,
     };
-    let app = mdp_api::build_router(state);
+    let mut app = mdp_api::build_router(state);
+
+    // Mount WebDAV if enabled
+    if config.webdav.enabled {
+        let webdav_state = mdp_webdav::WebDavState {
+            db,
+            storage,
+            storage_backend: config.storage.backend.clone(),
+        };
+        app = app.nest_service(
+            &config.webdav.prefix,
+            axum::routing::any(mdp_webdav::webdav_handler)
+                .with_state(webdav_state),
+        );
+        tracing::info!("WebDAV enabled at {}", config.webdav.prefix);
+    }
 
     // Start server
     let addr = format!("{}:{}", config.server.host, config.server.port);
