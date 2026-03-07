@@ -8,6 +8,7 @@ import {
   LogOut,
   Shield,
   HardDrive,
+  ImageIcon,
 } from 'lucide-react'
 import StorageBar from './StorageBar'
 import Avatar from './Avatar'
@@ -47,6 +48,10 @@ export default function Layout() {
           <NavLink to="/shares" className={linkClass}>
             <Share2 className="w-4 h-4" />
             分享管理
+          </NavLink>
+          <NavLink to="/images" className={linkClass}>
+            <ImageIcon className="w-4 h-4" />
+            图床
           </NavLink>
           <NavLink to="/tokens" className={linkClass}>
             <Key className="w-4 h-4" />
