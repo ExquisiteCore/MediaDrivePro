@@ -73,6 +73,7 @@ impl ImageService {
         content_type: &str,
         data: Vec<u8>,
         config: &ImageConfig,
+        base_url: &str,
     ) -> Result<ImageInfo, AppError> {
         // 1. Validate format
         if !ALLOWED_TYPES.contains(&content_type) {
@@ -100,7 +101,7 @@ impl ImageService {
             .await?;
 
         if let Some(existing) = existing {
-            return Ok(ImageInfo::from_model(existing, &config.cdn_base_url));
+            return Ok(ImageInfo::from_model(existing, base_url));
         }
 
         // 5. Decode image
@@ -169,7 +170,7 @@ impl ImageService {
         };
 
         let model = record.insert(db).await?;
-        Ok(ImageInfo::from_model(model, &config.cdn_base_url))
+        Ok(ImageInfo::from_model(model, base_url))
     }
 
     pub async fn list(

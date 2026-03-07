@@ -34,8 +34,11 @@ pub fn public_routes() -> Router<AppState> {
 async fn upload(
     State(state): State<AppState>,
     auth: AuthUser,
+    headers: HeaderMap,
     mut multipart: Multipart,
 ) -> Result<ApiResponse<ImageInfo>, AppError> {
+    let base_url = resolve_image_base_url(&headers, &state.config.image.cdn_base_url);
+
     let mut file_name = None;
     let mut content_type = None;
     let mut data = None;
@@ -71,6 +74,7 @@ async fn upload(
         &content_type,
         data,
         &state.config.image,
+        &base_url,
     )
     .await?;
 
@@ -86,12 +90,14 @@ struct ListQuery {
 async fn list(
     State(state): State<AppState>,
     auth: AuthUser,
+    headers: HeaderMap,
     Query(query): Query<ListQuery>,
 ) -> Result<ApiResponse<Vec<ImageInfo>>, AppError> {
+    let base_url = resolve_image_base_url(&headers, &state.config.image.cdn_base_url);
     let page = query.page.unwrap_or(1);
     let per_page = query.per_page.unwrap_or(20);
     let (items, total) =
-        ImageService::list(&state.db, auth.user_id, &state.config.image.cdn_base_url, page, per_page)
+        ImageService::list(&state.db, auth.user_id, &base_url, page, per_page)
             .await?;
     Ok(ApiResponse::paginated(items, page, per_page, total))
 }
@@ -159,6 +165,22 @@ async fn serve_thumb(
     ];
 
     Ok((StatusCode::OK, headers, data))
+}
+
+fn resolve_image_base_url(headers: &HeaderMap, cdn_base_url: &str) -> String {
+    if !cdn_base_url.is_empty() {
+        return cdn_base_url.to_string();
+    }
+    if let Some(host) = headers.get(header::HOST).and_then(|v| v.to_str().ok()) {
+        let scheme = if host.starts_with("localhost") || host.starts_with("127.0.0.1") {
+            "http"
+        } else {
+            "https"
+        };
+        format!("{scheme}://{host}/img")
+    } else {
+        String::new()
+    }
 }
 
 fn check_referer(headers: &HeaderMap, allowed: &[String]) -> Result<(), AppError> {
