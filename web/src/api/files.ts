@@ -7,6 +7,8 @@ export interface FileInfo {
   content_type: string
   folder_id: string | null
   status: string
+  transcode_status: string | null
+  has_media_info: boolean
   created_at: string
   updated_at: string
 }

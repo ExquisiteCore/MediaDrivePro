@@ -2,7 +2,7 @@ import {
   File, Image, Video, Music, FileText, FileCode,
 } from 'lucide-react'
 import { formatFileSize, formatDate } from '../lib/format'
-import { getPreviewType } from '../lib/mime'
+import { getPreviewType, isTranscodableVideo } from '../lib/mime'
 import type { FileInfo } from '../api/files'
 
 interface FileRowProps {
@@ -13,10 +13,11 @@ interface FileRowProps {
 
 function FileIcon({ contentType }: { contentType: string }) {
   const type = getPreviewType(contentType)
+  const transcodable = isTranscodableVideo(contentType)
   const cls = "w-5 h-5 shrink-0"
+  if (type === 'video' || transcodable) return <Video className={`${cls} text-purple-500`} />
   switch (type) {
     case 'image': return <Image className={`${cls} text-green-500`} />
-    case 'video': return <Video className={`${cls} text-purple-500`} />
     case 'audio': return <Music className={`${cls} text-pink-500`} />
     case 'pdf': return <FileCode className={`${cls} text-red-500`} />
     case 'text': return <FileText className={`${cls} text-blue-500`} />
@@ -25,7 +26,7 @@ function FileIcon({ contentType }: { contentType: string }) {
 }
 
 export default function FileRow({ file, onContextMenu, onPreview }: FileRowProps) {
-  const previewable = getPreviewType(file.content_type) !== 'none'
+  const previewable = getPreviewType(file.content_type) !== 'none' || isTranscodableVideo(file.content_type)
 
   return (
     <tr

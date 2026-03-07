@@ -8,6 +8,12 @@ const videoTypes = new Set([
   'video/mp4', 'video/webm', 'video/ogg',
 ])
 
+/** Video formats that need transcoding before browser playback */
+const transcodableTypes = new Set([
+  'video/x-matroska', 'video/x-msvideo', 'video/quicktime',
+  'video/x-flv', 'video/mpeg',
+])
+
 const audioTypes = new Set([
   'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/webm', 'audio/flac', 'audio/aac',
 ])
@@ -28,14 +34,19 @@ export function getPreviewType(contentType: string): PreviewType {
   return 'none'
 }
 
+/** Check if a content type is a video format that needs transcoding */
+export function isTranscodableVideo(contentType: string): boolean {
+  return transcodableTypes.has(contentType)
+}
+
+/** Check if a content type is any video format (native or transcodable) */
+export function isVideoFile(contentType: string): boolean {
+  return videoTypes.has(contentType) || transcodableTypes.has(contentType)
+}
+
 export function getFileIcon(contentType: string): string {
   const type = getPreviewType(contentType)
-  switch (type) {
-    case 'image': return 'image'
-    case 'video': return 'video'
-    case 'audio': return 'audio'
-    case 'pdf': return 'pdf'
-    case 'text': return 'text'
-    default: return 'file'
-  }
+  if (type !== 'none') return type
+  if (transcodableTypes.has(contentType)) return 'video'
+  return 'file'
 }
