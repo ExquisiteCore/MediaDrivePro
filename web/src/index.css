@@ -15,6 +15,28 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes step-in-forward {
+  from { opacity: 0; transform: translateX(40px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes step-in-back {
+  from { opacity: 0; transform: translateX(-40px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes stagger-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes check-bounce {
+  0% { transform: scale(0); }
+  50% { transform: scale(1.2); }
+  70% { transform: scale(0.9); }
+  100% { transform: scale(1); }
+}
+
 .animate-float {
   animation: float 6s ease-in-out infinite;
 }
@@ -29,4 +51,27 @@
 
 .animate-fade-in-up {
   animation: fade-in-up 0.5s ease-out both;
+}
+
+/* Step transition animations */
+.step-enter-forward {
+  animation: step-in-forward 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.step-enter-back {
+  animation: step-in-back 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Staggered element fade-in */
+.step-stagger-1 { animation: stagger-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.05s both; }
+.step-stagger-2 { animation: stagger-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both; }
+.step-stagger-3 { animation: stagger-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.15s both; }
+.step-stagger-4 { animation: stagger-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both; }
+.step-stagger-5 { animation: stagger-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.25s both; }
+.step-stagger-6 { animation: stagger-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.3s both; }
+.step-stagger-7 { animation: stagger-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.35s both; }
+
+/* Check mark bounce */
+.check-bounce {
+  animation: check-bounce 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both;
 }

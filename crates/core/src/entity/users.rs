@@ -14,6 +14,7 @@ pub struct Model {
     #[serde(skip_serializing)]
     pub password: String,
     pub role: String,
+    pub avatar: Option<String>,
     pub storage_quota: i64,
     pub storage_used: i64,
     pub created_at: DateTime<Utc>,

@@ -5,6 +5,7 @@ export interface User {
   username: string
   email: string
   role: string
+  avatar: string | null
   storage_quota: number
   storage_used: number
   created_at: string
@@ -44,4 +45,13 @@ export async function register(data: RegisterRequest): Promise<TokenResponse> {
 
 export async function getMe(): Promise<User> {
   return request<User>('/auth/me')
+}
+
+export async function uploadAvatar(file: File): Promise<User> {
+  const form = new FormData()
+  form.append('avatar', file)
+  return request<User>('/auth/avatar', {
+    method: 'POST',
+    body: form,
+  })
 }

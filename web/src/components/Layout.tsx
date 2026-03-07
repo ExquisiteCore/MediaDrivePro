@@ -73,7 +73,20 @@ export default function Layout() {
         {/* User info & logout */}
         <div className="p-3 border-t border-gray-200">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-700 truncate">{user?.username}</span>
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#b3d4fc] to-[#5b8db8] p-[1.5px] shrink-0">
+                <div className="w-full h-full rounded-full bg-white flex items-center justify-center overflow-hidden">
+                  {user?.avatar ? (
+                    <img src={`/api/v1/users/${user.id}/avatar`} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-xs font-bold text-[#5b8db8]/60">
+                      {user?.username?.charAt(0).toUpperCase()}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <span className="text-sm text-gray-700 truncate">{user?.username}</span>
+            </div>
             <button
               onClick={handleLogout}
               className="p-1.5 text-gray-400 hover:text-red-500 rounded transition-colors"

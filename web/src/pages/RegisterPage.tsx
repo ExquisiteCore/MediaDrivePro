@@ -1,11 +1,18 @@
-import { useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuthStore } from '../store/auth'
-import { HardDrive, Cloud, Shield, Zap } from 'lucide-react'
+import { uploadAvatar } from '../api/auth'
+import { HardDrive, Cloud, Shield, Zap, Camera, Check } from 'lucide-react'
+
+type Step = 1 | 2 | 3
 
 export default function RegisterPage() {
   const navigate = useNavigate()
-  const register = useAuthStore((s) => s.register)
+  const { register, updateUser, user } = useAuthStore()
+  const [step, setStep] = useState<Step>(1)
+  const [direction, setDirection] = useState<'forward' | 'back'>('forward')
+
+  // Step 1 state
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -13,7 +20,18 @@ export default function RegisterPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Step 2 state
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+  const [avatarUploading, setAvatarUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const goToStep = useCallback((next: Step) => {
+    setDirection(next > step ? 'forward' : 'back')
+    setStep(next)
+  }, [step])
+
+  // Step 1: Register
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
 
@@ -25,13 +43,37 @@ export default function RegisterPage() {
     setLoading(true)
     try {
       await register(username, email, password)
-      navigate('/files')
+      goToStep(2)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : '注册失败')
     } finally {
       setLoading(false)
     }
   }
+
+  // Step 2: Avatar
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Preview
+    const reader = new FileReader()
+    reader.onload = (ev) => setAvatarPreview(ev.target?.result as string)
+    reader.readAsDataURL(file)
+
+    // Upload
+    setAvatarUploading(true)
+    try {
+      const updated = await uploadAvatar(file)
+      updateUser(updated)
+    } catch {
+      // Preview stays, just skip upload error
+    } finally {
+      setAvatarUploading(false)
+    }
+  }
+
+  const displayName = user?.username || username
 
   return (
     <div className="min-h-screen flex bg-gradient-to-br from-[#f0f4f8] to-[#e8f0fa]">
@@ -81,88 +123,227 @@ export default function RegisterPage() {
 
       {/* Right form panel */}
       <div className="flex-1 flex items-center justify-center p-6 relative">
-        <div className="w-full max-w-[420px] animate-fade-in-up">
+        <div className="w-full max-w-[420px]">
           {/* Mobile logo */}
           <div className="flex items-center justify-center gap-2 mb-8 lg:hidden">
             <HardDrive className="w-8 h-8 text-[#5b8db8]" />
             <h1 className="text-2xl font-bold text-[#2c3e50]">MediaDrive Pro</h1>
           </div>
 
-          <div className="bg-white/80 backdrop-blur-sm rounded-[20px] shadow-[0_8px_32px_rgba(0,0,0,0.08)] p-8">
-            <h2 className="text-2xl font-semibold text-[#2c3e50] mb-1">创建账号</h2>
-            <p className="text-[#6b7c93] text-sm mb-6">注册一个新的 MediaDrive Pro 账号</p>
+          {/* Progress dots */}
+          <div className="flex items-center justify-center gap-2 mb-6">
+            {[1, 2, 3].map((s) => (
+              <div
+                key={s}
+                className={`h-2 rounded-full transition-all duration-500 ease-out ${
+                  s === step
+                    ? 'w-8 bg-[#5b8db8]'
+                    : s < step
+                      ? 'w-2 bg-[#5b8db8]/60'
+                      : 'w-2 bg-[#5b8db8]/20'
+                }`}
+              />
+            ))}
+          </div>
 
-            {error && (
-              <div className="text-sm text-red-600 bg-red-50 p-3 rounded-xl mb-4">{error}</div>
+          {/* Card with step content */}
+          <div className="bg-white/80 backdrop-blur-sm rounded-[20px] shadow-[0_8px_32px_rgba(0,0,0,0.08)] p-8 overflow-hidden">
+            {/* Step 1: Create Account */}
+            {step === 1 && (
+              <div
+                key="step1"
+                className={`step-content ${direction === 'forward' ? 'step-enter-forward' : 'step-enter-back'}`}
+              >
+                <h2 className="text-2xl font-semibold text-[#2c3e50] mb-1 step-stagger-1">创建账号</h2>
+                <p className="text-[#6b7c93] text-sm mb-6 step-stagger-2">注册一个新的 MediaDrive Pro 账号</p>
+
+                {error && (
+                  <div className="text-sm text-red-600 bg-red-50 p-3 rounded-xl mb-4">{error}</div>
+                )}
+
+                <form onSubmit={handleRegister} className="space-y-4">
+                  <div className="step-stagger-3">
+                    <label className="block text-sm font-medium text-[#4a5568] mb-1.5">用户名</label>
+                    <input
+                      type="text"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      placeholder="请输入用户名"
+                      className="w-full px-4 py-3 bg-[#f5f5f7] border-0 rounded-xl text-[#2c3e50] placeholder:text-[#a0aec0] focus:outline-none focus:shadow-[0_0_0_3px_rgba(179,212,252,0.3)] transition-shadow"
+                      required
+                      autoFocus
+                      minLength={2}
+                      maxLength={64}
+                    />
+                  </div>
+
+                  <div className="step-stagger-4">
+                    <label className="block text-sm font-medium text-[#4a5568] mb-1.5">邮箱</label>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="请输入邮箱地址"
+                      className="w-full px-4 py-3 bg-[#f5f5f7] border-0 rounded-xl text-[#2c3e50] placeholder:text-[#a0aec0] focus:outline-none focus:shadow-[0_0_0_3px_rgba(179,212,252,0.3)] transition-shadow"
+                      required
+                    />
+                  </div>
+
+                  <div className="step-stagger-5">
+                    <label className="block text-sm font-medium text-[#4a5568] mb-1.5">密码</label>
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="请输入密码（至少6位）"
+                      className="w-full px-4 py-3 bg-[#f5f5f7] border-0 rounded-xl text-[#2c3e50] placeholder:text-[#a0aec0] focus:outline-none focus:shadow-[0_0_0_3px_rgba(179,212,252,0.3)] transition-shadow"
+                      required
+                      minLength={6}
+                    />
+                  </div>
+
+                  <div className="step-stagger-6">
+                    <label className="block text-sm font-medium text-[#4a5568] mb-1.5">确认密码</label>
+                    <input
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="请再次输入密码"
+                      className="w-full px-4 py-3 bg-[#f5f5f7] border-0 rounded-xl text-[#2c3e50] placeholder:text-[#a0aec0] focus:outline-none focus:shadow-[0_0_0_3px_rgba(179,212,252,0.3)] transition-shadow"
+                      required
+                      minLength={6}
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full py-3 bg-[#5b8db8] text-white rounded-xl font-medium hover:bg-[#4a7da8] disabled:opacity-50 transition-all duration-200 active:scale-[0.98] step-stagger-7"
+                  >
+                    {loading ? '注册中...' : '注册'}
+                  </button>
+                </form>
+
+                <p className="text-center text-sm text-[#6b7c93] mt-6">
+                  已有账号？{' '}
+                  <Link to="/login" className="text-[#5b8db8] font-medium hover:text-[#4a7da8] transition-colors">
+                    登录
+                  </Link>
+                </p>
+              </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-[#4a5568] mb-1.5">用户名</label>
-                <input
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="请输入用户名"
-                  className="w-full px-4 py-3 bg-[#f5f5f7] border-0 rounded-xl text-[#2c3e50] placeholder:text-[#a0aec0] focus:outline-none focus:shadow-[0_0_0_3px_rgba(179,212,252,0.3)] transition-shadow"
-                  required
-                  autoFocus
-                  minLength={2}
-                  maxLength={64}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-[#4a5568] mb-1.5">邮箱</label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="请输入邮箱地址"
-                  className="w-full px-4 py-3 bg-[#f5f5f7] border-0 rounded-xl text-[#2c3e50] placeholder:text-[#a0aec0] focus:outline-none focus:shadow-[0_0_0_3px_rgba(179,212,252,0.3)] transition-shadow"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-[#4a5568] mb-1.5">密码</label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="请输入密码（至少6位）"
-                  className="w-full px-4 py-3 bg-[#f5f5f7] border-0 rounded-xl text-[#2c3e50] placeholder:text-[#a0aec0] focus:outline-none focus:shadow-[0_0_0_3px_rgba(179,212,252,0.3)] transition-shadow"
-                  required
-                  minLength={6}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-[#4a5568] mb-1.5">确认密码</label>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="请再次输入密码"
-                  className="w-full px-4 py-3 bg-[#f5f5f7] border-0 rounded-xl text-[#2c3e50] placeholder:text-[#a0aec0] focus:outline-none focus:shadow-[0_0_0_3px_rgba(179,212,252,0.3)] transition-shadow"
-                  required
-                  minLength={6}
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3 bg-[#e8f4fd] text-[#5b8db8] border border-[#b3d4fc] rounded-xl font-medium hover:bg-[#d4e8fd] disabled:opacity-50 transition-all duration-200 active:scale-[0.98]"
+            {/* Step 2: Set Avatar */}
+            {step === 2 && (
+              <div
+                key="step2"
+                className={`step-content ${direction === 'forward' ? 'step-enter-forward' : 'step-enter-back'}`}
               >
-                {loading ? '注册中...' : '注册'}
-              </button>
-            </form>
+                <h2 className="text-2xl font-semibold text-[#2c3e50] mb-1 text-center step-stagger-1">设置头像</h2>
+                <p className="text-[#6b7c93] text-sm mb-8 text-center step-stagger-2">选一张喜欢的图片作为你的头像</p>
 
-            <p className="text-center text-sm text-[#6b7c93] mt-6">
-              已有账号？{' '}
-              <Link to="/login" className="text-[#5b8db8] font-medium hover:text-[#4a7da8] transition-colors">登录</Link>
-            </p>
+                <div className="flex flex-col items-center step-stagger-3">
+                  {/* Avatar ring */}
+                  <div
+                    className="relative w-32 h-32 rounded-full cursor-pointer group mb-6"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <div className="absolute inset-0 rounded-full bg-gradient-to-br from-[#b3d4fc] to-[#5b8db8] p-[3px]">
+                      <div className="w-full h-full rounded-full bg-white flex items-center justify-center overflow-hidden">
+                        {avatarPreview ? (
+                          <img src={avatarPreview} alt="avatar" className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-4xl font-bold text-[#5b8db8]/40">
+                            {displayName.charAt(0).toUpperCase()}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {/* Hover overlay */}
+                    <div className="absolute inset-0 rounded-full bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                      <Camera className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                    {avatarUploading && (
+                      <div className="absolute inset-0 rounded-full bg-white/60 flex items-center justify-center">
+                        <div className="w-8 h-8 border-3 border-[#5b8db8] border-t-transparent rounded-full animate-spin" />
+                      </div>
+                    )}
+                  </div>
+
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                  />
+
+                  <p className="text-sm text-[#6b7c93] mb-8">点击选择图片</p>
+                </div>
+
+                <div className="flex gap-3 step-stagger-4">
+                  <button
+                    onClick={() => goToStep(3)}
+                    className="flex-1 py-3 bg-[#f5f5f7] text-[#6b7c93] rounded-xl font-medium hover:bg-[#eee] transition-all duration-200"
+                  >
+                    跳过
+                  </button>
+                  <button
+                    onClick={() => goToStep(3)}
+                    disabled={avatarUploading}
+                    className="flex-1 py-3 bg-[#5b8db8] text-white rounded-xl font-medium hover:bg-[#4a7da8] disabled:opacity-50 transition-all duration-200 active:scale-[0.98]"
+                  >
+                    下一步
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 3: Welcome */}
+            {step === 3 && (
+              <div
+                key="step3"
+                className="step-content step-enter-forward"
+              >
+                <div className="flex flex-col items-center py-4">
+                  {/* Check animation */}
+                  <div className="w-20 h-20 rounded-full bg-green-50 flex items-center justify-center mb-6 check-bounce">
+                    <Check className="w-10 h-10 text-green-500" strokeWidth={3} />
+                  </div>
+
+                  <h2 className="text-2xl font-semibold text-[#2c3e50] mb-2 step-stagger-1">
+                    欢迎加入 MediaDrive Pro！
+                  </h2>
+                  <p className="text-[#6b7c93] text-sm mb-8 step-stagger-2">一切准备就绪，开始管理你的文件吧</p>
+
+                  {/* User card */}
+                  <div className="flex items-center gap-4 bg-[#f5f5f7] rounded-2xl p-4 w-full mb-8 step-stagger-3">
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#b3d4fc] to-[#5b8db8] p-[2px] shrink-0">
+                      <div className="w-full h-full rounded-full bg-white flex items-center justify-center overflow-hidden">
+                        {avatarPreview ? (
+                          <img src={avatarPreview} alt="avatar" className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-lg font-bold text-[#5b8db8]/40">
+                            {displayName.charAt(0).toUpperCase()}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="font-medium text-[#2c3e50]">{displayName}</p>
+                      <p className="text-sm text-[#6b7c93]">{email}</p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => navigate('/files')}
+                    className="w-full py-3 bg-[#5b8db8] text-white rounded-xl font-medium hover:bg-[#4a7da8] transition-all duration-200 active:scale-[0.98] step-stagger-4"
+                  >
+                    进入网盘
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

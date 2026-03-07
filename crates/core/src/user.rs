@@ -13,6 +13,7 @@ pub struct UserInfo {
     pub username: String,
     pub email: String,
     pub role: String,
+    pub avatar: Option<String>,
     pub storage_quota: i64,
     pub storage_used: i64,
     pub created_at: chrono::DateTime<Utc>,
@@ -25,6 +26,7 @@ impl From<users::Model> for UserInfo {
             username: u.username,
             email: u.email,
             role: u.role,
+            avatar: u.avatar,
             storage_quota: u.storage_quota,
             storage_used: u.storage_used,
             created_at: u.created_at,
@@ -89,6 +91,7 @@ impl UserService {
             email: Set(email.to_string()),
             password: Set(hashed),
             role: Set(role.to_string()),
+            avatar: Set(None),
             storage_quota: Set(10_737_418_240), // 10GB
             storage_used: Set(0),
             created_at: Set(now),
@@ -128,6 +131,24 @@ impl UserService {
             access_token: token,
             user: user.into(),
         })
+    }
+
+    pub async fn update_avatar(
+        db: &DatabaseConnection,
+        user_id: Uuid,
+        storage_key: &str,
+    ) -> Result<(), AppError> {
+        let user = users::Entity::find_by_id(user_id)
+            .one(db)
+            .await?
+            .ok_or(AppError::NotFound("用户不存在".to_string()))?;
+
+        let mut active: users::ActiveModel = user.into();
+        active.avatar = Set(Some(storage_key.to_string()));
+        active.updated_at = Set(Utc::now());
+        active.update(db).await?;
+
+        Ok(())
     }
 
     pub async fn get_by_id(db: &DatabaseConnection, id: Uuid) -> Result<UserInfo, AppError> {
