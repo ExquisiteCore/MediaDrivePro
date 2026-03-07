@@ -18,3 +18,10 @@ impl FromRef<AppState> for AppConfig {
         state.config.clone()
     }
 }
+
+// Allow extracting DatabaseConnection directly from AppState in Axum extractors.
+impl FromRef<AppState> for DatabaseConnection {
+    fn from_ref(state: &AppState) -> Self {
+        state.db.clone()
+    }
+}

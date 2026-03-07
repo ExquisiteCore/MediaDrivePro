@@ -42,6 +42,9 @@ headers = "0.4"
 http-body-util = "0.1"
 bytes = "1"
 
+# Image processing
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp"] }
+
 # Utils
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "serde"] }

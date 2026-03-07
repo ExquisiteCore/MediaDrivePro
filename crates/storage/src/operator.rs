@@ -56,6 +56,11 @@ pub mod storage_key {
     pub fn image(hash: &str) -> String {
         format!("image/{hash}.webp")
     }
+
+    /// Key for image bed thumbnails: image/thumb/{hash}.webp
+    pub fn image_thumb(hash: &str) -> String {
+        format!("image/thumb/{hash}.webp")
+    }
 }
 
 trait IntoOk {

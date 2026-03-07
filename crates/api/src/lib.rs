@@ -6,6 +6,7 @@ mod admin;
 mod auth;
 mod files;
 mod folders;
+mod images;
 mod shares;
 pub mod state;
 mod tokens;
@@ -18,10 +19,12 @@ pub fn build_router(state: state::AppState) -> Router {
         .merge(shares::routes())
         .merge(shares::public_routes())
         .merge(tokens::routes())
-        .merge(admin::routes());
+        .merge(admin::routes())
+        .merge(images::routes());
 
     Router::new()
         .nest("/api/v1", api_v1)
+        .merge(images::public_routes())
         .layer(TraceLayer::new_for_http())
         .layer(
             CorsLayer::new()

@@ -9,6 +9,8 @@ pub struct AppConfig {
     pub auth: AuthConfig,
     #[serde(default)]
     pub webdav: WebDavConfig,
+    #[serde(default)]
+    pub image: ImageConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -80,6 +82,37 @@ impl Default for WebDavConfig {
 
 fn default_webdav_prefix() -> String {
     "/dav".to_string()
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ImageConfig {
+    #[serde(default = "default_max_upload_size")]
+    pub max_upload_size: usize,
+    #[serde(default = "default_compression_quality")]
+    pub compression_quality: u8,
+    #[serde(default)]
+    pub cdn_base_url: String,
+    #[serde(default)]
+    pub allowed_referers: Vec<String>,
+}
+
+impl Default for ImageConfig {
+    fn default() -> Self {
+        Self {
+            max_upload_size: 20_971_520,
+            compression_quality: 80,
+            cdn_base_url: String::new(),
+            allowed_referers: Vec::new(),
+        }
+    }
+}
+
+fn default_max_upload_size() -> usize {
+    20_971_520 // 20MB
+}
+
+fn default_compression_quality() -> u8 {
+    80
 }
 
 impl AppConfig {
