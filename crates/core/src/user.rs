@@ -79,12 +79,16 @@ impl UserService {
         let now = Utc::now();
         let user_id = Uuid::new_v4();
 
+        // First registered user becomes admin
+        let user_count = users::Entity::find().count(db).await?;
+        let role = if user_count == 0 { "admin" } else { "user" };
+
         let user = users::ActiveModel {
             id: Set(user_id),
             username: Set(username.to_string()),
             email: Set(email.to_string()),
             password: Set(hashed),
-            role: Set("user".to_string()),
+            role: Set(role.to_string()),
             storage_quota: Set(10_737_418_240), // 10GB
             storage_used: Set(0),
             created_at: Set(now),
