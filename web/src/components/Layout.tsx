@@ -9,6 +9,7 @@ import {
   Shield,
   HardDrive,
   ImageIcon,
+  Tv2,
 } from 'lucide-react'
 import StorageBar from './StorageBar'
 import Avatar from './Avatar'
@@ -52,6 +53,10 @@ export default function Layout() {
           <NavLink to="/images" className={linkClass}>
             <ImageIcon className="w-4 h-4" />
             图床
+          </NavLink>
+          <NavLink to="/rooms" className={linkClass}>
+            <Tv2 className="w-4 h-4" />
+            观影室
           </NavLink>
           <NavLink to="/tokens" className={linkClass}>
             <Key className="w-4 h-4" />

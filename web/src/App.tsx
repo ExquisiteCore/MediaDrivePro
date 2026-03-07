@@ -12,6 +12,8 @@ import SettingsPage from './pages/SettingsPage'
 import AdminPage from './pages/AdminPage'
 import PublicSharePage from './pages/PublicSharePage'
 import ImagesPage from './pages/ImagesPage'
+import RoomsPage from './pages/RoomsPage'
+import WatchRoomPage from './pages/WatchRoomPage'
 
 export default function App() {
   const { token, loadUser } = useAuthStore()
@@ -34,6 +36,8 @@ export default function App() {
           <Route path="/files/folder/:folderId" element={<FileBrowserPage />} />
           <Route path="/shares" element={<SharesPage />} />
           <Route path="/images" element={<ImagesPage />} />
+          <Route path="/rooms" element={<RoomsPage />} />
+          <Route path="/rooms/:id" element={<WatchRoomPage />} />
           <Route path="/tokens" element={<TokensPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/admin" element={<AdminPage />} />
