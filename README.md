@@ -1,14 +1,17 @@
-# MediaDrivePro
+# MediaDrive Pro
 
-基于对象存储的网盘系统，同时提供 WebDAV、HTTP API、图床、多人同步观影等媒体能力。
+基于对象存储的私有云网盘系统，提供 Web UI、WebDAV、HTTP API、文件分享等功能。
 
 ## 功能
 
-- **网盘** — 文件上传/下载/管理，目录结构，分享链接
+- **Web UI** — 现代化 Web 界面，文件浏览/上传/预览/管理
+- **文件管理** — 文件上传/下载、目录结构、重命名/移动/删除
+- **分片上传** — 大文件自动分片，断点续传，并行上传
+- **文件预览** — 图片/视频/音频/PDF/文本 在线预览
+- **文件分享** — 生成分享链接，支持密码保护、过期时间、下载次数限制
 - **WebDAV** — 挂载为本地磁盘（Windows/macOS/Linux/移动端）
-- **图床** — 上传图片自动压缩转 WebP，返回 CDN 链接
-- **同步观影** — 多人实时同步播放室，聊天弹幕
-- **媒体库** — 视频转码 HLS，TMDB 刮削，字幕支持
+- **API Token** — 创建独立 Token 用于 WebDAV 或第三方集成
+- **管理面板** — 管理员查看所有用户及存储使用
 
 ## 技术栈
 
@@ -18,25 +21,49 @@
 | ORM | SeaORM |
 | 数据库 | SQLite（默认）/ PostgreSQL |
 | 对象存储 | OpenDAL（本地文件系统 / S3 / MinIO / OSS / COS） |
-| 前端 | React + TailwindCSS |
+| 前端 | React 19 + TypeScript + Vite + TailwindCSS v4 |
+| 状态管理 | Zustand |
+| 路由 | React Router v7 |
+| 包管理 | pnpm |
 
 ## 快速开始
 
 ### 前置要求
 
-- Rust 1.75+
+- Rust 1.85+
+- Node.js 20+
+- pnpm
 
-### 运行
+### 构建前端
 
 ```bash
-git clone https://github.com/yourname/MediaDrivePro.git
-cd MediaDrivePro
+cd web
+pnpm install
+pnpm build
+```
+
+### 启动服务
+
+```bash
 cargo run
 ```
 
 默认使用 SQLite，无需安装任何数据库，启动后自动建表。
 
-服务监听 `http://localhost:8080`。
+服务监听 `http://localhost:8080`，前端自动从 `web/dist/` 提供服务。
+
+### 前端开发模式
+
+```bash
+# 终端 1：启动后端
+cargo run
+
+# 终端 2：启动前端开发服务器（带热更新）
+cd web
+pnpm dev
+```
+
+前端开发服务器监听 `http://localhost:5173`，API 请求自动代理到后端。
 
 ### 配置
 
@@ -53,21 +80,55 @@ max_connections = 5
 auto_migrate = true
 
 [storage]
-backend = "fs"  # fs | s3 | minio
+backend = "fs"  # fs | s3
 
 [storage.fs]
 root = "./uploads"
 
+[storage.s3]
+bucket = "mediadrive"
+region = "us-east-1"
+endpoint = ""
+access_key_id = ""
+secret_access_key = ""
+
 [auth]
 jwt_secret = "change-me-in-production"
 access_token_ttl_secs = 1800
+
+[webdav]
+enabled = true
+prefix = "/dav"
 ```
 
 支持环境变量覆盖（`MDP_` 前缀）：
 
 ```bash
-MDP_DATABASE__URL=postgres://... cargo run
+MDP_DATABASE__URL=postgres://... MDP_AUTH__JWT_SECRET=your-secret cargo run
 ```
+
+## Web UI
+
+Web 界面包含以下页面：
+
+| 页面 | 路径 | 说明 |
+|---|---|---|
+| 登录 | `/login` | 用户名 + 密码登录 |
+| 注册 | `/register` | 创建新账号 |
+| 文件浏览器 | `/files` | 文件/文件夹管理主页面 |
+| 分享管理 | `/shares` | 查看和管理所有分享链接 |
+| Token 管理 | `/tokens` | 创建和管理 API Token |
+| 用户设置 | `/settings` | 个人信息和存储空间用量 |
+| 管理员面板 | `/admin` | 用户列表（仅管理员） |
+| 公开分享 | `/s/:token` | 访客查看/下载分享文件 |
+
+### 文件浏览器功能
+
+- 文件夹导航（面包屑路径）
+- 拖拽上传（大文件自动分片，显示进度条）
+- 右键上下文菜单（预览、下载、重命名、移动、分享、删除）
+- 文件搜索和排序（名称/大小/日期）
+- 在线预览（图片、视频、音频、PDF、文本/代码）
 
 ## API
 
@@ -89,7 +150,17 @@ GET    /api/v1/files              — 文件列表（?folder_id=&page=&per_page=
 GET    /api/v1/files/:id          — 文件详情
 PUT    /api/v1/files/:id          — 重命名/移动文件
 GET    /api/v1/files/:id/download — 下载文件
+GET    /api/v1/files/:id/preview  — 预览文件（浏览器内联展示）
 DELETE /api/v1/files/:id          — 删除文件
+```
+
+### 分片上传
+
+```
+POST   /api/v1/files/multipart/init                  — 初始化分片上传
+PUT    /api/v1/files/multipart/:upload_id/:part_num   — 上传分片
+POST   /api/v1/files/multipart/:upload_id/complete    — 完成上传（合并分片）
+DELETE /api/v1/files/multipart/:upload_id             — 取消上传
 ```
 
 ### 目录
@@ -103,23 +174,6 @@ GET    /api/v1/folders/:id/children — 子目录和文件
 DELETE /api/v1/folders/:id          — 删除目录
 ```
 
-### API Token
-
-```
-POST   /api/v1/tokens      — 创建 API Token（返回明文，仅此一次）
-GET    /api/v1/tokens       — 列出所有 Token
-DELETE /api/v1/tokens/:id   — 删除 Token
-```
-
-### 分片上传
-
-```
-POST   /api/v1/files/multipart/init                  — 初始化分片上传
-PUT    /api/v1/files/multipart/:upload_id/:part_num   — 上传分片
-POST   /api/v1/files/multipart/:upload_id/complete    — 完成上传（合并分片）
-DELETE /api/v1/files/multipart/:upload_id             — 取消上传
-```
-
 ### 分享
 
 ```
@@ -129,6 +183,20 @@ DELETE /api/v1/shares/:id     — 取消分享
 GET    /s/:token              — 公开访问分享（无需认证）
 POST   /s/:token/verify       — 验证提取码
 GET    /s/:token/download     — 通过分享下载文件
+```
+
+### API Token
+
+```
+POST   /api/v1/tokens       — 创建 API Token（返回明文，仅此一次）
+GET    /api/v1/tokens        — 列出所有 Token
+DELETE /api/v1/tokens/:id    — 删除 Token
+```
+
+### 管理员
+
+```
+GET    /api/v1/admin/users   — 列出所有用户（仅管理员）
 ```
 
 ### WebDAV
@@ -170,16 +238,25 @@ curl http://localhost:8080/api/v1/files \
 
 ```
 MediaDrivePro/
-├── src/main.rs           # 入口
-├── config.toml           # 配置文件
-├── migration/            # 数据库迁移
-└── crates/
-    ├── common/           # 配置、错误、响应类型
-    ├── auth/             # JWT、密码哈希、认证中间件
-    ├── storage/          # OpenDAL 存储封装
-    ├── core/             # 业务逻辑（用户/文件/目录/Token/分片上传 Service）
-    ├── api/              # HTTP 路由和处理器
-    └── webdav/           # WebDAV 协议实现（dav-server + Basic Auth）
+├── src/main.rs               # 入口（服务启动、WebDAV 挂载、SPA 静态文件）
+├── config.toml               # 配置文件
+├── migration/                 # 数据库迁移
+├── crates/
+│   ├── common/               # 配置、错误类型、响应格式
+│   ├── auth/                 # JWT、密码哈希、认证中间件
+│   ├── storage/              # OpenDAL 存储封装
+│   ├── core/                 # 业务逻辑（用户/文件/目录/分享/Token/分片上传）
+│   ├── api/                  # HTTP 路由和处理器
+│   └── webdav/               # WebDAV 协议实现（dav-server + Basic Auth）
+└── web/                      # 前端（React + Vite + TypeScript）
+    ├── src/
+    │   ├── api/              # API 客户端封装
+    │   ├── components/       # UI 组件
+    │   ├── pages/            # 页面
+    │   ├── store/            # Zustand 状态管理
+    │   └── lib/              # 工具函数
+    ├── package.json
+    └── vite.config.ts
 ```
 
 ## 路线图
@@ -187,7 +264,7 @@ MediaDrivePro/
 - [x] V0.1 — 基础骨架（用户认证 + 文件上传下载 + 目录管理）
 - [x] V0.2 — 网盘完善（重命名/移动、搜索排序、分享、存储配额）
 - [x] V0.3 — WebDAV + 分片上传 + API Token
-- [ ] V1.0 — Web UI + Docker 部署
+- [x] V1.0 — Web UI
 - [ ] V1.1 — 图床
 - [ ] V2.0 — 视频播放 + 转码 + 媒体库
 - [ ] V3.0 — 同步观影室
