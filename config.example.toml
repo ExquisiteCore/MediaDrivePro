@@ -21,7 +21,7 @@ access_key_id = ""
 secret_access_key = ""
 
 [auth]
-jwt_secret = "dev-secret-change-in-production"
+jwt_secret = "change-me-in-production"
 access_token_ttl_secs = 1800
 
 [webdav]

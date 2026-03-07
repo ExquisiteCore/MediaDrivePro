@@ -1,10 +1,29 @@
+# Rust
 /target
 **/*.rs.bk
 *.pdb
-.env
-*.log
-/uploads
-/data
-/.claude
+
+# Node
 /web/node_modules
 /web/dist
+
+# Data
+/data
+/uploads
+
+# Config (may contain secrets)
+config.toml
+.env
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude
+/.claude

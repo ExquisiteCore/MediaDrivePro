@@ -1,0 +1,19 @@
+services:
+  mediadrive:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+      - ./uploads:/app/uploads
+      # - ./config.toml:/app/config.toml  # 自定义配置文件
+    environment:
+      - MDP_AUTH__JWT_SECRET=change-me-in-production
+      # 切换 S3 存储：
+      # - MDP_STORAGE__BACKEND=s3
+      # - MDP_STORAGE__S3__BUCKET=my-bucket
+      # - MDP_STORAGE__S3__REGION=us-east-1
+      # - MDP_STORAGE__S3__ENDPOINT=https://s3.example.com
+      # - MDP_STORAGE__S3__ACCESS_KEY_ID=xxx
+      # - MDP_STORAGE__S3__SECRET_ACCESS_KEY=xxx
+    restart: unless-stopped

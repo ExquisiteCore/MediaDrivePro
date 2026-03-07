@@ -102,6 +102,83 @@ impl AppConfig {
         if let Ok(val) = std::env::var("MDP_STORAGE__BACKEND") {
             config.storage.backend = val;
         }
+        if let Ok(val) = std::env::var("MDP_STORAGE__FS__ROOT") {
+            config
+                .storage
+                .fs
+                .get_or_insert(FsStorageConfig {
+                    root: String::new(),
+                })
+                .root = val;
+        }
+        if let Ok(val) = std::env::var("MDP_STORAGE__S3__BUCKET") {
+            config
+                .storage
+                .s3
+                .get_or_insert(S3StorageConfig {
+                    bucket: String::new(),
+                    region: String::new(),
+                    endpoint: String::new(),
+                    access_key_id: String::new(),
+                    secret_access_key: String::new(),
+                })
+                .bucket = val;
+        }
+        if let Ok(val) = std::env::var("MDP_STORAGE__S3__REGION") {
+            config
+                .storage
+                .s3
+                .get_or_insert(S3StorageConfig {
+                    bucket: String::new(),
+                    region: String::new(),
+                    endpoint: String::new(),
+                    access_key_id: String::new(),
+                    secret_access_key: String::new(),
+                })
+                .region = val;
+        }
+        if let Ok(val) = std::env::var("MDP_STORAGE__S3__ENDPOINT") {
+            config
+                .storage
+                .s3
+                .get_or_insert(S3StorageConfig {
+                    bucket: String::new(),
+                    region: String::new(),
+                    endpoint: String::new(),
+                    access_key_id: String::new(),
+                    secret_access_key: String::new(),
+                })
+                .endpoint = val;
+        }
+        if let Ok(val) = std::env::var("MDP_STORAGE__S3__ACCESS_KEY_ID") {
+            config
+                .storage
+                .s3
+                .get_or_insert(S3StorageConfig {
+                    bucket: String::new(),
+                    region: String::new(),
+                    endpoint: String::new(),
+                    access_key_id: String::new(),
+                    secret_access_key: String::new(),
+                })
+                .access_key_id = val;
+        }
+        if let Ok(val) = std::env::var("MDP_STORAGE__S3__SECRET_ACCESS_KEY") {
+            config
+                .storage
+                .s3
+                .get_or_insert(S3StorageConfig {
+                    bucket: String::new(),
+                    region: String::new(),
+                    endpoint: String::new(),
+                    access_key_id: String::new(),
+                    secret_access_key: String::new(),
+                })
+                .secret_access_key = val;
+        }
+        if let Ok(val) = std::env::var("MDP_WEBDAV__ENABLED") {
+            config.webdav.enabled = val == "true" || val == "1";
+        }
 
         Ok(config)
     }
