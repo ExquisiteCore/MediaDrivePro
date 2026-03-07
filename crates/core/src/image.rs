@@ -116,22 +116,19 @@ impl ImageService {
         let width = img.width() as i32;
         let height = img.height() as i32;
 
-        // 6. Compress to WebP
+        // 6. Compress to WebP (lossy)
         let webp_data = {
-            let mut buf = Cursor::new(Vec::new());
-            img.write_to(&mut buf, image::ImageFormat::WebP)
-                .map_err(|e| AppError::Internal(format!("WebP 编码失败: {e}")))?;
-            buf.into_inner()
+            let encoder = webp::Encoder::from_image(&img)
+                .map_err(|e| AppError::Internal(format!("WebP 编码器创建失败: {e}")))?;
+            encoder.encode(config.compression_quality as f32).to_vec()
         };
 
         // 7. Generate 300x300 thumbnail
         let thumb_data = {
             let thumb = img.thumbnail(300, 300);
-            let mut buf = Cursor::new(Vec::new());
-            thumb
-                .write_to(&mut buf, image::ImageFormat::WebP)
-                .map_err(|e| AppError::Internal(format!("缩略图生成失败: {e}")))?;
-            buf.into_inner()
+            let encoder = webp::Encoder::from_image(&thumb)
+                .map_err(|e| AppError::Internal(format!("缩略图编码器创建失败: {e}")))?;
+            encoder.encode(config.compression_quality as f32).to_vec()
         };
 
         let size = webp_data.len() as i64;

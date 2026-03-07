@@ -21,5 +21,6 @@ dashmap.workspace = true
 rand.workspace = true
 tokio = { workspace = true }
 image.workspace = true
+webp.workspace = true
 reqwest.workspace = true
 regex.workspace = true
