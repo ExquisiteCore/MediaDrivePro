@@ -1,6 +1,6 @@
 # MediaDrive Pro
 
-基于对象存储的私有云网盘系统，提供 Web UI、WebDAV、HTTP API、文件分享等功能。
+基于对象存储的私有云网盘系统，提供 Web UI、WebDAV、HTTP API、图床、文件分享等功能。
 
 ## 功能
 
@@ -9,8 +9,9 @@
 - **分片上传** — 大文件自动分片，断点续传，并行上传
 - **文件预览** — 图片/视频/音频/PDF/文本 在线预览
 - **文件分享** — 生成分享链接，支持密码保护、过期时间、下载次数限制
+- **图床** — 图片上传自动压缩为 WebP + 生成缩略图，返回 URL/Markdown 链接，支持防盗链，兼容 PicGo
 - **WebDAV** — 挂载为本地磁盘（Windows/macOS/Linux/移动端）
-- **API Token** — 创建独立 Token 用于 WebDAV 或第三方集成
+- **API Token** — 创建独立 Token 用于 WebDAV、图床或第三方集成
 - **管理面板** — 管理员查看所有用户及存储使用
 
 ## 技术栈
@@ -99,6 +100,12 @@ access_token_ttl_secs = 1800
 [webdav]
 enabled = true
 prefix = "/dav"
+
+[image]
+max_upload_size = 20971520   # 20MB
+compression_quality = 80     # WebP 压缩质量 (1-100)
+cdn_base_url = ""            # 留空则使用服务器自身地址
+allowed_referers = []        # 防盗链白名单，留空则不限制
 ```
 
 支持环境变量覆盖（`MDP_` 前缀）：
@@ -114,11 +121,12 @@ Web 界面包含以下页面：
 | 页面 | 路径 | 说明 |
 |---|---|---|
 | 登录 | `/login` | 用户名 + 密码登录 |
-| 注册 | `/register` | 创建新账号 |
+| 注册 | `/register` | 创建新账号（多步骤向导 + 头像设置） |
 | 文件浏览器 | `/files` | 文件/文件夹管理主页面 |
 | 分享管理 | `/shares` | 查看和管理所有分享链接 |
+| 图床 | `/images` | 图片上传/管理，一键复制 URL/Markdown |
 | Token 管理 | `/tokens` | 创建和管理 API Token |
-| 用户设置 | `/settings` | 个人信息和存储空间用量 |
+| 用户设置 | `/settings` | 个人信息、头像和存储空间用量 |
 | 管理员面板 | `/admin` | 用户列表（仅管理员） |
 | 公开分享 | `/s/:token` | 访客查看/下载分享文件 |
 
@@ -132,7 +140,7 @@ Web 界面包含以下页面：
 
 ## API
 
-所有接口以 `/api/v1/` 为前缀，需 Bearer Token 认证（除注册/登录外）。
+所有接口以 `/api/v1/` 为前缀，需 Bearer Token 认证（除注册/登录外）。也支持 `X-API-Token: username:token` 头认证（用于 PicGo 等客户端）。
 
 ### 认证
 
@@ -140,6 +148,8 @@ Web 界面包含以下页面：
 POST /api/v1/auth/register   — 注册
 POST /api/v1/auth/login      — 登录
 GET  /api/v1/auth/me         — 当前用户信息
+POST /api/v1/auth/avatar     — 上传头像
+GET  /api/v1/users/:id/avatar — 获取用户头像
 ```
 
 ### 文件
@@ -193,6 +203,18 @@ GET    /api/v1/tokens        — 列出所有 Token
 DELETE /api/v1/tokens/:id    — 删除 Token
 ```
 
+### 图床
+
+```
+POST   /api/v1/images       — 上传图片（自动压缩为 WebP + 生成缩略图）
+GET    /api/v1/images        — 列出已上传图片
+DELETE /api/v1/images/:id    — 删除图片
+GET    /img/:hash.webp       — 公开访问图片（可配置防盗链）
+GET    /img/thumb/:hash.webp — 缩略图
+```
+
+上传响应包含 `url`、`thumb_url`、`markdown` 字段，方便直接使用。
+
 ### 管理员
 
 ```
@@ -232,6 +254,16 @@ curl -X POST http://localhost:8080/api/v1/files \
 # 文件列表
 curl http://localhost:8080/api/v1/files \
   -H "Authorization: Bearer <token>"
+
+# 上传图片到图床（使用 JWT）
+curl -X POST http://localhost:8080/api/v1/images \
+  -H "Authorization: Bearer <token>" \
+  -F "image=@photo.jpg"
+
+# 上传图片到图床（使用 API Token，适用于 PicGo 等客户端）
+curl -X POST http://localhost:8080/api/v1/images \
+  -H "X-API-Token: demo:<api_token>" \
+  -F "image=@photo.jpg"
 ```
 
 ## 项目结构
@@ -245,7 +277,7 @@ MediaDrivePro/
 │   ├── common/               # 配置、错误类型、响应格式
 │   ├── auth/                 # JWT、密码哈希、认证中间件
 │   ├── storage/              # OpenDAL 存储封装
-│   ├── core/                 # 业务逻辑（用户/文件/目录/分享/Token/分片上传）
+│   ├── core/                 # 业务逻辑（用户/文件/目录/分享/Token/图床/分片上传）
 │   ├── api/                  # HTTP 路由和处理器
 │   └── webdav/               # WebDAV 协议实现（dav-server + Basic Auth）
 └── web/                      # 前端（React + Vite + TypeScript）
@@ -265,7 +297,7 @@ MediaDrivePro/
 - [x] V0.2 — 网盘完善（重命名/移动、搜索排序、分享、存储配额）
 - [x] V0.3 — WebDAV + 分片上传 + API Token
 - [x] V1.0 — Web UI
-- [ ] V1.1 — 图床
+- [x] V1.1 — 图床（WebP 压缩 + 缩略图 + 防盗链 + PicGo 兼容）
 - [ ] V2.0 — 视频播放 + 转码 + 媒体库
 - [ ] V3.0 — 同步观影室
 
