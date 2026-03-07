@@ -3,6 +3,8 @@ pub mod files;
 pub mod folders;
 pub mod images;
 pub mod media_info;
+pub mod room_members;
+pub mod rooms;
 pub mod shares;
 pub mod transcode_tasks;
 pub mod users;

@@ -9,6 +9,8 @@ mod m20250307_000006_add_avatar_to_users;
 mod m20250307_000007_create_images_table;
 mod m20250307_000008_create_transcode_tasks_table;
 mod m20250307_000009_create_media_info_table;
+mod m20250307_000010_create_rooms_table;
+mod m20250307_000011_create_room_members_table;
 
 pub struct Migrator;
 
@@ -25,6 +27,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20250307_000007_create_images_table::Migration),
             Box::new(m20250307_000008_create_transcode_tasks_table::Migration),
             Box::new(m20250307_000009_create_media_info_table::Migration),
+            Box::new(m20250307_000010_create_rooms_table::Migration),
+            Box::new(m20250307_000011_create_room_members_table::Migration),
         ]
     }
 

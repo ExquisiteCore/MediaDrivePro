@@ -8,6 +8,8 @@ mod files;
 mod folders;
 mod images;
 mod media;
+pub mod room_manager;
+mod rooms;
 mod shares;
 pub mod state;
 mod stream;
@@ -26,7 +28,9 @@ pub fn build_router(state: state::AppState) -> Router {
         .merge(images::routes())
         .merge(transcode::routes())
         .merge(media::routes())
-        .merge(stream::routes());
+        .merge(stream::routes())
+        .merge(rooms::routes())
+        .merge(rooms::ws_routes());
 
     Router::new()
         .nest("/api/v1", api_v1)

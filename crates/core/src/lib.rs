@@ -5,6 +5,7 @@ pub mod folder;
 pub mod image;
 pub mod media;
 pub mod multipart_upload;
+pub mod room;
 pub mod share;
 pub mod transcode;
 pub mod user;

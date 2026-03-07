@@ -113,6 +113,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         storage: storage.clone(),
         config: config.clone(),
         upload_sessions,
+        room_channels: std::sync::Arc::new(dashmap::DashMap::new()),
     };
     let mut app = mdp_api::build_router(state);
 

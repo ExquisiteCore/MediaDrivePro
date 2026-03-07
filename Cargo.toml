@@ -7,7 +7,7 @@ edition = "2024"
 
 [workspace.dependencies]
 # Web framework
-axum = { version = "0.8", features = ["multipart"] }
+axum = { version = "0.8", features = ["multipart", "ws"] }
 axum-extra = { version = "0.10", features = ["typed-header"] }
 tokio = { version = "1", features = ["full"] }
 tower = "0.5"

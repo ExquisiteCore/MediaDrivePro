@@ -1,6 +1,6 @@
 # MediaDrive Pro
 
-基于对象存储的私有云网盘系统，提供 Web UI、WebDAV、HTTP API、图床、视频转码播放、媒体识别等功能。
+基于对象存储的私有云网盘系统，提供 Web UI、WebDAV、HTTP API、图床、视频转码播放、媒体识别、同步观影室等功能。
 
 ## 功能
 
@@ -13,6 +13,7 @@
 - **视频转码** — FFmpeg 后台转码为 HLS，支持 480p/720p/1080p 多档位，自动重试
 - **HLS 播放** — HLS.js 流媒体播放，支持字幕轨道，Safari 原生兼容
 - **媒体识别** — 智能文件名解析（剧集/电影/动漫）+ TMDB 刮削（海报/简介/年份）
+- **同步观影室** — 多人实时同步观影，WebSocket 房间、播放同步 + 延迟补偿、聊天、弹幕
 - **WebDAV** — 挂载为本地磁盘（Windows/macOS/Linux/移动端）
 - **API Token** — 创建独立 Token 用于 WebDAV、图床或第三方集成
 - **管理面板** — 管理员查看所有用户及存储使用
@@ -154,6 +155,8 @@ Web 界面包含以下页面：
 | 文件浏览器 | `/files` | 文件/文件夹管理主页面 |
 | 分享管理 | `/shares` | 查看和管理所有分享链接 |
 | 图床 | `/images` | 图片上传/管理，一键复制 URL/Markdown |
+| 观影室 | `/rooms` | 创建/加入同步观影房间 |
+| 观影室播放 | `/rooms/:id` | 同步播放 + 聊天 + 弹幕 |
 | Token 管理 | `/tokens` | 创建和管理 API Token |
 | 用户设置 | `/settings` | 个人信息、头像和存储空间用量 |
 | 管理员面板 | `/admin` | 用户列表（仅管理员） |
@@ -274,6 +277,23 @@ POST /api/v1/media/:file_id/scan  — 手动触发媒体识别（文件名解析
 - 动漫：`[字幕组] 标题 - 03 (1080p).mkv`
 - 电影：`Movie.Name.2024.720p.mkv`
 
+### 同步观影室
+
+```
+POST   /api/v1/rooms              — 创建房间（{ name, max_members? }）
+GET    /api/v1/rooms              — 列出我的房间
+GET    /api/v1/rooms/:id          — 房间详情（含成员列表）
+DELETE /api/v1/rooms/:id          — 关闭房间（仅房主）
+POST   /api/v1/rooms/join         — 通过邀请码加入（{ invite_code }）
+POST   /api/v1/rooms/:id/play     — 设置播放文件（仅房主，{ file_id }）
+GET    /api/v1/rooms/:id/members  — 成员列表
+WS     /api/v1/rooms/:id/ws?token=— WebSocket 实时同步
+```
+
+WebSocket 消息：
+- **客户端→服务端**：`play`、`pause`、`seek { time }`、`chat { content }`、`danmaku { content, color?, position? }`、`ping`
+- **服务端→客户端**：`sync { status, time, file_id, server_time }`、`member_join`、`member_leave`、`chat`、`danmaku`、`pong`、`error`
+
 ### 管理员
 
 ```
@@ -350,14 +370,15 @@ MediaDrivePro/
 │   ├── common/               # 配置、错误类型、响应格式
 │   ├── auth/                 # JWT、密码哈希、认证中间件
 │   ├── storage/              # OpenDAL 存储封装
-│   ├── core/                 # 业务逻辑（用户/文件/目录/分享/Token/图床/转码/媒体识别）
-│   ├── api/                  # HTTP 路由和处理器
+│   ├── core/                 # 业务逻辑（用户/文件/目录/分享/Token/图床/转码/媒体识别/观影室）
+│   ├── api/                  # HTTP 路由和处理器（含 WebSocket）
 │   └── webdav/               # WebDAV 协议实现（dav-server + Basic Auth）
 └── web/                      # 前端（React + Vite + TypeScript）
     ├── src/
     │   ├── api/              # API 客户端封装
-    │   ├── components/       # UI 组件
+    │   ├── components/       # UI 组件（含弹幕、聊天、同步播放器）
     │   ├── pages/            # 页面
+    │   ├── hooks/            # 自定义 Hooks（WebSocket 等）
     │   ├── store/            # Zustand 状态管理
     │   └── lib/              # 工具函数
     ├── package.json
@@ -371,8 +392,8 @@ MediaDrivePro/
 - [x] V0.3 — WebDAV + 分片上传 + API Token
 - [x] V1.0 — Web UI
 - [x] V1.1 — 图床（WebP 压缩 + 缩略图 + 防盗链 + PicGo 兼容）
-- [x] V2.0 — 视频转码（FFmpeg HLS）+ 流媒体播放（HLS.js）+ 媒体识别（TMDB 刮削）
-- [ ] V3.0 — 同步观影室
+- [x] V1.2 — 视频转码（FFmpeg HLS）+ 流媒体播放（HLS.js）+ 媒体识别（TMDB 刮削）
+- [x] V1.3 — 同步观影室（WebSocket 房间、播放同步 + 延迟补偿、聊天、弹幕）
 
 ## License
 
