@@ -8,7 +8,7 @@ COPY web/ ./
 RUN pnpm build
 
 # Stage 2: Build backend
-FROM rust:1.85-bookworm AS backend
+FROM rust:latest AS backend
 WORKDIR /build
 # Copy manifests first for dependency caching
 COPY Cargo.toml Cargo.lock ./
