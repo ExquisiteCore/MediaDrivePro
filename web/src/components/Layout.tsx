@@ -10,9 +10,10 @@ import {
   HardDrive,
 } from 'lucide-react'
 import StorageBar from './StorageBar'
+import Avatar from './Avatar'
 
 export default function Layout() {
-  const { user, logout, avatarVersion } = useAuthStore()
+  const { user, logout } = useAuthStore()
   const navigate = useNavigate()
 
   const handleLogout = () => {
@@ -74,17 +75,9 @@ export default function Layout() {
         <div className="p-3 border-t border-gray-200">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 min-w-0">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#b3d4fc] to-[#5b8db8] p-[1.5px] shrink-0">
-                <div className="w-full h-full rounded-full bg-white flex items-center justify-center overflow-hidden">
-                  {user?.avatar ? (
-                    <img src={`/api/v1/users/${user.id}/avatar?v=${avatarVersion}`} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-xs font-bold text-[#5b8db8]/60">
-                      {user?.username?.charAt(0).toUpperCase()}
-                    </span>
-                  )}
-                </div>
-              </div>
+              {user && (
+                <Avatar userId={user.id} username={user.username} avatar={user.avatar} size={32} />
+              )}
               <span className="text-sm text-gray-700 truncate">{user?.username}</span>
             </div>
             <button

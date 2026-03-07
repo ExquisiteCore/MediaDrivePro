@@ -5,12 +5,12 @@ import { formatFileSize } from '../lib/format'
 import { formatDateTime } from '../lib/format'
 import { User, Mail, Shield, Calendar, Camera } from 'lucide-react'
 import StorageBar from '../components/StorageBar'
+import Avatar from '../components/Avatar'
 
 export default function SettingsPage() {
-  const { user, updateUser, avatarVersion, bumpAvatarVersion } = useAuthStore()
+  const { user, updateUser } = useAuthStore()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [avatarError, setAvatarError] = useState('')
 
   if (!user) {
@@ -21,24 +21,17 @@ export default function SettingsPage() {
     const file = e.target.files?.[0]
     if (!file) return
 
-    const reader = new FileReader()
-    reader.onload = (ev) => setPreviewUrl(ev.target?.result as string)
-    reader.readAsDataURL(file)
-
     setUploading(true)
     setAvatarError('')
     try {
       const updated = await uploadAvatar(file)
       updateUser(updated)
-      bumpAvatarVersion()
     } catch (err) {
       setAvatarError(err instanceof Error ? err.message : '头像上传失败')
     } finally {
       setUploading(false)
     }
   }
-
-  const avatarSrc = previewUrl || (user.avatar ? `/api/v1/users/${user.id}/avatar?v=${avatarVersion}` : null)
 
   return (
     <div className="p-6 max-w-2xl">
@@ -51,22 +44,12 @@ export default function SettingsPage() {
         {/* Avatar */}
         <div className="flex items-center gap-4 mb-6">
           <div
-            className="relative w-16 h-16 rounded-full cursor-pointer group shrink-0"
+            className="relative cursor-pointer group shrink-0"
             onClick={() => fileInputRef.current?.click()}
           >
-            <div className="w-full h-full rounded-full bg-gradient-to-br from-[#b3d4fc] to-[#5b8db8] p-[2px]">
-              <div className="w-full h-full rounded-full bg-white flex items-center justify-center overflow-hidden">
-                {avatarSrc ? (
-                  <img src={avatarSrc} alt="avatar" className="w-full h-full object-cover" />
-                ) : (
-                  <span className="text-2xl font-bold text-[#5b8db8]/40">
-                    {user.username.charAt(0).toUpperCase()}
-                  </span>
-                )}
-              </div>
-            </div>
+            <Avatar userId={user.id} username={user.username} avatar={user.avatar} size={64} />
             <div className="absolute inset-0 rounded-full bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-              <Camera className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+              <Camera className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
             {uploading && (
               <div className="absolute inset-0 rounded-full bg-white/60 flex items-center justify-center">

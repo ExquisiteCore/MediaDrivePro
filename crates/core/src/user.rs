@@ -138,15 +138,22 @@ impl UserService {
         user_id: Uuid,
         storage_key: &str,
     ) -> Result<(), AppError> {
-        let user = users::Entity::find_by_id(user_id)
-            .one(db)
-            .await?
-            .ok_or(AppError::NotFound("用户不存在".to_string()))?;
+        let result = users::Entity::update_many()
+            .col_expr(
+                users::Column::Avatar,
+                sea_orm::sea_query::Expr::value(storage_key.to_string()),
+            )
+            .col_expr(
+                users::Column::UpdatedAt,
+                sea_orm::sea_query::Expr::value(Utc::now()),
+            )
+            .filter(users::Column::Id.eq(user_id))
+            .exec(db)
+            .await?;
 
-        let mut active: users::ActiveModel = user.into();
-        active.avatar = Set(Some(storage_key.to_string()));
-        active.updated_at = Set(Utc::now());
-        active.update(db).await?;
+        if result.rows_affected == 0 {
+            return Err(AppError::NotFound("用户不存在".to_string()));
+        }
 
         Ok(())
     }

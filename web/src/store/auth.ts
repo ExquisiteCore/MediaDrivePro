@@ -6,20 +6,17 @@ interface AuthState {
   user: User | null
   token: string | null
   loading: boolean
-  avatarVersion: number
   login: (username: string, password: string) => Promise<void>
   register: (username: string, email: string, password: string) => Promise<void>
   logout: () => void
   loadUser: () => Promise<void>
   updateUser: (user: User) => void
-  bumpAvatarVersion: () => void
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   token: localStorage.getItem('token'),
   loading: false,
-  avatarVersion: 0,
 
   login: async (username, password) => {
     const res = await authApi.login({ username, password })
@@ -50,5 +47,4 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   updateUser: (user) => set({ user }),
-  bumpAvatarVersion: () => set((s) => ({ avatarVersion: s.avatarVersion + 1 })),
 }))
