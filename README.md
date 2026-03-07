@@ -33,24 +33,75 @@
 
 ## 快速开始
 
-### 前置要求
+### Docker 部署（推荐）
+
+```bash
+docker pull ghcr.io/exquisitecore/mediadrivepro:1.2
+```
+
+```bash
+docker run -d \
+  --name mediadrivepro \
+  -p 8080:8080 \
+  -v mdp-data:/app/data \
+  -v mdp-uploads:/app/uploads \
+  ghcr.io/exquisitecore/mediadrivepro:1.2
+```
+
+启动后访问 `http://localhost:8080`。
+
+**自定义配置**：挂载 `config.toml` 并通过环境变量覆盖：
+
+```bash
+docker run -d \
+  --name mediadrivepro \
+  -p 8080:8080 \
+  -v mdp-data:/app/data \
+  -v mdp-uploads:/app/uploads \
+  -v ./config.toml:/app/config.toml \
+  -e MDP_AUTH__JWT_SECRET=your-secret \
+  ghcr.io/exquisitecore/mediadrivepro:1.2
+```
+
+**Docker Compose**：
+
+```yaml
+services:
+  mediadrivepro:
+    image: ghcr.io/exquisitecore/mediadrivepro:1.2
+    ports:
+      - "8080:8080"
+    volumes:
+      - mdp-data:/app/data
+      - mdp-uploads:/app/uploads
+      # - ./config.toml:/app/config.toml
+    environment:
+      - MDP_AUTH__JWT_SECRET=change-me-in-production
+    restart: unless-stopped
+
+volumes:
+  mdp-data:
+  mdp-uploads:
+```
+
+```bash
+docker compose up -d
+```
+
+### 从源码构建
+
+**前置要求：**
 
 - Rust 1.85+
 - Node.js 20+
 - pnpm
 - FFmpeg + ffprobe（视频转码需要，[下载](https://ffmpeg.org/download.html)）
 
-### 构建前端
-
 ```bash
-cd web
-pnpm install
-pnpm build
-```
+# 构建前端
+cd web && pnpm install && pnpm build && cd ..
 
-### 启动服务
-
-```bash
+# 启动服务
 cargo run
 ```
 
