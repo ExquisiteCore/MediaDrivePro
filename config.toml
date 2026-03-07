@@ -27,3 +27,20 @@ access_token_ttl_secs = 1800
 [webdav]
 enabled = true
 prefix = "/dav"
+
+[image]
+max_upload_size = 20971520
+compression_quality = 80
+cdn_base_url = ""
+allowed_referers = []
+
+[video]
+ffmpeg_path = "ffmpeg"
+ffprobe_path = "ffprobe"
+max_concurrent = 1
+default_profiles = ["720p"]
+poll_interval_secs = 5
+
+[tmdb]
+api_key = ""
+language = "zh-CN"

@@ -61,6 +61,26 @@ pub mod storage_key {
     pub fn image_thumb(hash: &str) -> String {
         format!("image/thumb/{hash}.webp")
     }
+
+    /// Key for transcode output directory: transcode/{file_id}
+    pub fn transcode_dir(file_id: Uuid) -> String {
+        format!("transcode/{file_id}")
+    }
+
+    /// Key for transcode master playlist: transcode/{file_id}/index.m3u8
+    pub fn transcode_master(file_id: Uuid) -> String {
+        format!("transcode/{file_id}/index.m3u8")
+    }
+
+    /// Key for transcode profile playlist: transcode/{file_id}/{profile}/index.m3u8
+    pub fn transcode_profile(file_id: Uuid, profile: &str) -> String {
+        format!("transcode/{file_id}/{profile}/index.m3u8")
+    }
+
+    /// Key for subtitle file: transcode/{file_id}/subtitles/{name}
+    pub fn subtitle(file_id: Uuid, name: &str) -> String {
+        format!("transcode/{file_id}/subtitles/{name}")
+    }
 }
 
 trait IntoOk {

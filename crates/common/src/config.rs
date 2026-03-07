@@ -11,6 +11,10 @@ pub struct AppConfig {
     pub webdav: WebDavConfig,
     #[serde(default)]
     pub image: ImageConfig,
+    #[serde(default)]
+    pub video: VideoConfig,
+    #[serde(default)]
+    pub tmdb: TmdbConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -113,6 +117,75 @@ fn default_max_upload_size() -> usize {
 
 fn default_compression_quality() -> u8 {
     80
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct VideoConfig {
+    #[serde(default = "default_ffmpeg_path")]
+    pub ffmpeg_path: String,
+    #[serde(default = "default_ffprobe_path")]
+    pub ffprobe_path: String,
+    #[serde(default = "default_max_concurrent")]
+    pub max_concurrent: usize,
+    #[serde(default = "default_profiles")]
+    pub default_profiles: Vec<String>,
+    #[serde(default = "default_poll_interval")]
+    pub poll_interval_secs: u64,
+}
+
+impl Default for VideoConfig {
+    fn default() -> Self {
+        Self {
+            ffmpeg_path: "ffmpeg".to_string(),
+            ffprobe_path: "ffprobe".to_string(),
+            max_concurrent: 1,
+            default_profiles: vec!["720p".to_string()],
+            poll_interval_secs: 5,
+        }
+    }
+}
+
+fn default_ffmpeg_path() -> String {
+    "ffmpeg".to_string()
+}
+fn default_ffprobe_path() -> String {
+    "ffprobe".to_string()
+}
+fn default_max_concurrent() -> usize {
+    1
+}
+fn default_profiles() -> Vec<String> {
+    vec!["720p".to_string()]
+}
+fn default_poll_interval() -> u64 {
+    5
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct TmdbConfig {
+    #[serde(default)]
+    pub api_key: String,
+    #[serde(default = "default_tmdb_language")]
+    pub language: String,
+    #[serde(default = "default_tmdb_base_url")]
+    pub base_url: String,
+}
+
+impl Default for TmdbConfig {
+    fn default() -> Self {
+        Self {
+            api_key: String::new(),
+            language: "zh-CN".to_string(),
+            base_url: "https://api.themoviedb.org/3".to_string(),
+        }
+    }
+}
+
+fn default_tmdb_language() -> String {
+    "zh-CN".to_string()
+}
+fn default_tmdb_base_url() -> String {
+    "https://api.themoviedb.org/3".to_string()
 }
 
 impl AppConfig {

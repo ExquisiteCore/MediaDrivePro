@@ -16,6 +16,8 @@ pub struct FileInfo {
     pub content_type: String,
     pub folder_id: Option<Uuid>,
     pub status: String,
+    pub transcode_status: Option<String>,
+    pub has_media_info: bool,
     pub created_at: chrono::DateTime<Utc>,
     pub updated_at: chrono::DateTime<Utc>,
 }
@@ -29,6 +31,8 @@ impl From<files::Model> for FileInfo {
             content_type: f.content_type,
             folder_id: f.folder_id,
             status: f.status,
+            transcode_status: None,
+            has_media_info: false,
             created_at: f.created_at,
             updated_at: f.updated_at,
         }

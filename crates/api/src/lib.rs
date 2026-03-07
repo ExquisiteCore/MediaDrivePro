@@ -7,9 +7,12 @@ mod auth;
 mod files;
 mod folders;
 mod images;
+mod media;
 mod shares;
 pub mod state;
+mod stream;
 mod tokens;
+mod transcode;
 
 pub fn build_router(state: state::AppState) -> Router {
     let api_v1 = Router::new()
@@ -20,7 +23,10 @@ pub fn build_router(state: state::AppState) -> Router {
         .merge(shares::public_routes())
         .merge(tokens::routes())
         .merge(admin::routes())
-        .merge(images::routes());
+        .merge(images::routes())
+        .merge(transcode::routes())
+        .merge(media::routes())
+        .merge(stream::routes());
 
     Router::new()
         .nest("/api/v1", api_v1)

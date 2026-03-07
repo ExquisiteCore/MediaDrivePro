@@ -61,6 +61,51 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
     }
 
+    // Start background transcode worker
+    {
+        let db2 = db.clone();
+        let storage2 = storage.clone();
+        let video_config = config.video.clone();
+        let max_concurrent = video_config.max_concurrent.max(1);
+        let poll_interval = video_config.poll_interval_secs;
+
+        tokio::spawn(async move {
+            let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(max_concurrent));
+            tracing::info!(
+                "Transcode worker started (max_concurrent={max_concurrent}, poll_interval={poll_interval}s)"
+            );
+
+            loop {
+                tokio::time::sleep(tokio::time::Duration::from_secs(poll_interval)).await;
+
+                let permit = match semaphore.clone().try_acquire_owned() {
+                    Ok(p) => p,
+                    Err(_) => continue,
+                };
+
+                match mdp_core::transcode::TranscodeService::poll_pending(&db2).await {
+                    Ok(Some(task)) => {
+                        let db3 = db2.clone();
+                        let storage3 = storage2.clone();
+                        let cfg = video_config.clone();
+                        tokio::spawn(async move {
+                            mdp_core::transcode::run_transcode(&db3, &storage3, &cfg, task)
+                                .await;
+                            drop(permit);
+                        });
+                    }
+                    Ok(None) => {
+                        drop(permit);
+                    }
+                    Err(e) => {
+                        tracing::error!("Transcode poll error: {e}");
+                        drop(permit);
+                    }
+                }
+            }
+        });
+    }
+
     // Build application
     let state = mdp_api::state::AppState {
         db: db.clone(),
