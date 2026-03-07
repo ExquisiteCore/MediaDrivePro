@@ -231,13 +231,14 @@ impl TranscodeService {
         db: &DatabaseConnection,
         task_id: Uuid,
         error_msg: &str,
+        permanent: bool,
     ) -> Result<(), AppError> {
         let task = transcode_tasks::Entity::find_by_id(task_id)
             .one(db)
             .await?
             .ok_or(AppError::NotFound("任务不存在".to_string()))?;
 
-        let new_status = if task.retry_count >= 2 {
+        let new_status = if permanent || task.retry_count >= 2 {
             "failed"
         } else {
             "pending"
@@ -290,8 +291,10 @@ pub async fn run_transcode(
         }
         Err(e) => {
             let msg = format!("{e}");
-            tracing::error!("Transcode task {task_id} failed: {msg}");
-            if let Err(e2) = TranscodeService::mark_failed(db, task_id, &msg).await {
+            let permanent = is_permanent_error(&msg);
+            tracing::error!("Transcode task {task_id} failed{}: {msg}",
+                if permanent { " (permanent)" } else { "" });
+            if let Err(e2) = TranscodeService::mark_failed(db, task_id, &msg, permanent).await {
                 tracing::error!("Failed to mark task {task_id} as failed: {e2}");
             }
         }
@@ -307,6 +310,9 @@ async fn run_transcode_inner(
 ) -> Result<String, AppError> {
     let profile = get_profile(profile_name)
         .ok_or_else(|| AppError::Validation(format!("Unknown profile: {profile_name}")))?;
+
+    // Pre-flight: verify FFmpeg is available before downloading anything
+    check_ffmpeg_available(&config.ffmpeg_path).await?;
 
     // Get file info
     let file = files::Entity::find_by_id(file_id)
@@ -578,6 +584,30 @@ async fn extract_subtitles(
     }
 
     Ok(())
+}
+
+/// Check if FFmpeg binary is available before starting work.
+async fn check_ffmpeg_available(ffmpeg_path: &str) -> Result<(), AppError> {
+    match Command::new(ffmpeg_path).arg("-version").output().await {
+        Ok(output) if output.status.success() => Ok(()),
+        Ok(_) => Err(AppError::Internal(
+            "FFmpeg 返回了错误状态，请检查安装".to_string(),
+        )),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Err(AppError::Internal(
+            format!("FFmpeg 未安装或不在 PATH 中 (路径: {ffmpeg_path})。请安装 FFmpeg: https://ffmpeg.org/download.html"),
+        )),
+        Err(e) => Err(AppError::Internal(format!("FFmpeg 启动失败: {e}"))),
+    }
+}
+
+/// Permanent errors should not be retried.
+fn is_permanent_error(msg: &str) -> bool {
+    msg.contains("program not found")
+        || msg.contains("未安装")
+        || msg.contains("不在 PATH")
+        || msg.contains("不是视频文件")
+        || msg.contains("不支持的转码配置")
+        || msg.contains("文件不存在")
 }
 
 /// RAII guard to clean up temporary directory.
