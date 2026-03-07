@@ -20,12 +20,12 @@ pub fn routes() -> Router<AppState> {
         .route("/shares/{id}", axum::routing::delete(delete_share))
 }
 
-/// Public share access routes: /s/:token
+/// Public share access routes (no auth required)
 pub fn public_routes() -> Router<AppState> {
     Router::new()
-        .route("/s/{token}", get(get_share))
-        .route("/s/{token}/verify", post(verify_share))
-        .route("/s/{token}/download", get(download_share))
+        .route("/shares/public/{token}", get(get_share))
+        .route("/shares/public/{token}/verify", post(verify_share))
+        .route("/shares/public/{token}/download", get(download_share))
 }
 
 #[derive(Deserialize)]

@@ -47,7 +47,7 @@ export async function deleteShare(id: string): Promise<void> {
 
 // Public share endpoints (no auth)
 export async function getPublicShare(token: string): Promise<PublicShareInfo> {
-  const res = await fetch(`/s/${token}`)
+  const res = await fetch(`/api/v1/shares/public/${token}`)
   if (!res.ok) {
     const body = await res.json()
     throw new Error(body.error?.message || '分享不存在')
@@ -57,7 +57,7 @@ export async function getPublicShare(token: string): Promise<PublicShareInfo> {
 }
 
 export async function verifySharePassword(token: string, password: string): Promise<PublicShareInfo> {
-  const res = await fetch(`/s/${token}/verify`, {
+  const res = await fetch(`/api/v1/shares/public/${token}/verify`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ password }),
@@ -71,5 +71,5 @@ export async function verifySharePassword(token: string, password: string): Prom
 }
 
 export function getShareDownloadUrl(token: string): string {
-  return `/s/${token}/download`
+  return `/api/v1/shares/public/${token}/download`
 }
