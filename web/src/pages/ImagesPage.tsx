@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ImageInfo, listImages, uploadImage, deleteImage } from '../api/images'
+import { listImages, uploadImage, deleteImage } from '../api/images'
+import type { ImageInfo } from '../api/images'
 import { formatFileSize, formatDateTime } from '../lib/format'
-import { Upload, Trash2, Copy, Check, X, ImageIcon, Link, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Upload, Trash2, Copy, Check, X, ImageIcon, ChevronLeft, ChevronRight } from 'lucide-react'
 
 export default function ImagesPage() {
   const [images, setImages] = useState<ImageInfo[]>([])

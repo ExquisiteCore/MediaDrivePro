@@ -1,4 +1,5 @@
-import { request, requestPaginated, PaginatedResponse } from './client'
+import { request, requestPaginated } from './client'
+import type { PaginatedResponse } from './client'
 
 export interface ImageInfo {
   id: string
