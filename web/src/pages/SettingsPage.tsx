@@ -7,10 +7,11 @@ import { User, Mail, Shield, Calendar, Camera } from 'lucide-react'
 import StorageBar from '../components/StorageBar'
 
 export default function SettingsPage() {
-  const { user, updateUser } = useAuthStore()
+  const { user, updateUser, avatarVersion, bumpAvatarVersion } = useAuthStore()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [avatarError, setAvatarError] = useState('')
 
   if (!user) {
     return <div className="p-8 text-center text-gray-400">加载中...</div>
@@ -25,17 +26,19 @@ export default function SettingsPage() {
     reader.readAsDataURL(file)
 
     setUploading(true)
+    setAvatarError('')
     try {
       const updated = await uploadAvatar(file)
       updateUser(updated)
-    } catch {
-      // keep preview even if upload fails
+      bumpAvatarVersion()
+    } catch (err) {
+      setAvatarError(err instanceof Error ? err.message : '头像上传失败')
     } finally {
       setUploading(false)
     }
   }
 
-  const avatarSrc = previewUrl || (user.avatar ? `/api/v1/users/${user.id}/avatar` : null)
+  const avatarSrc = previewUrl || (user.avatar ? `/api/v1/users/${user.id}/avatar?v=${avatarVersion}` : null)
 
   return (
     <div className="p-6 max-w-2xl">
@@ -88,6 +91,10 @@ export default function SettingsPage() {
             className="hidden"
           />
         </div>
+
+        {avatarError && (
+          <div className="text-sm text-red-600 bg-red-50 p-3 rounded-lg mb-6">{avatarError}</div>
+        )}
 
         <div className="space-y-3">
           <div className="flex items-center gap-3">

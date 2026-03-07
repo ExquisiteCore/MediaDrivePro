@@ -12,7 +12,7 @@ import {
 import StorageBar from './StorageBar'
 
 export default function Layout() {
-  const { user, logout } = useAuthStore()
+  const { user, logout, avatarVersion } = useAuthStore()
   const navigate = useNavigate()
 
   const handleLogout = () => {
@@ -77,7 +77,7 @@ export default function Layout() {
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#b3d4fc] to-[#5b8db8] p-[1.5px] shrink-0">
                 <div className="w-full h-full rounded-full bg-white flex items-center justify-center overflow-hidden">
                   {user?.avatar ? (
-                    <img src={`/api/v1/users/${user.id}/avatar`} alt="" className="w-full h-full object-cover" />
+                    <img src={`/api/v1/users/${user.id}/avatar?v=${avatarVersion}`} alt="" className="w-full h-full object-cover" />
                   ) : (
                     <span className="text-xs font-bold text-[#5b8db8]/60">
                       {user?.username?.charAt(0).toUpperCase()}

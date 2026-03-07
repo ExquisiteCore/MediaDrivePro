@@ -1,6 +1,6 @@
 use axum::{
     Json, Router,
-    extract::{Multipart, Path, State},
+    extract::{DefaultBodyLimit, Multipart, Path, State},
     http::{StatusCode, header},
     response::IntoResponse,
     routing::{get, post},
@@ -18,7 +18,10 @@ pub fn routes() -> Router<AppState> {
         .route("/auth/register", post(register))
         .route("/auth/login", post(login))
         .route("/auth/me", get(me))
-        .route("/auth/avatar", post(upload_avatar))
+        .route(
+            "/auth/avatar",
+            post(upload_avatar).layer(DefaultBodyLimit::max(10 * 1024 * 1024)),
+        )
         .route("/users/{id}/avatar", get(get_avatar))
 }
 
@@ -110,7 +113,6 @@ async fn upload_avatar(
     let data = data.ok_or(AppError::Validation("缺少头像文件".to_string()))?;
     let ct = content_type.unwrap_or_else(|| "image/jpeg".to_string());
 
-    // Validate it's an image
     if !ct.starts_with("image/") {
         return Err(AppError::Validation("只能上传图片文件".to_string()));
     }
@@ -118,11 +120,10 @@ async fn upload_avatar(
     let storage_key = format!("avatars/{}.{}", auth.user_id, ext);
     state
         .storage
-        .write(&storage_key, data)
+        .write(&storage_key, data.to_vec())
         .await
         .map_err(|e| AppError::Internal(format!("存储头像失败: {e}")))?;
 
-    // Update user avatar field
     UserService::update_avatar(&state.db, auth.user_id, &storage_key).await?;
 
     let user = UserService::get_by_id(&state.db, auth.user_id).await?;
