@@ -25,17 +25,27 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let config = AppConfig::from_ref(state);
 
-        let auth_header = parts
+        // Try Authorization header first, then ?token= query param (for browser embeds)
+        let token = if let Some(auth_header) = parts
             .headers
             .get("Authorization")
             .and_then(|v| v.to_str().ok())
-            .ok_or(AppError::Unauthorized)?;
+        {
+            auth_header
+                .strip_prefix("Bearer ")
+                .ok_or(AppError::Unauthorized)?
+                .to_string()
+        } else if let Some(query) = parts.uri.query() {
+            query
+                .split('&')
+                .find_map(|pair| pair.strip_prefix("token="))
+                .map(|t| urlencoding::decode(t).unwrap_or_default().into_owned())
+                .ok_or(AppError::Unauthorized)?
+        } else {
+            return Err(AppError::Unauthorized);
+        };
 
-        let token = auth_header
-            .strip_prefix("Bearer ")
-            .ok_or(AppError::Unauthorized)?;
-
-        let claims = jwt::decode_token(token, &config.auth.jwt_secret)?;
+        let claims = jwt::decode_token(&token, &config.auth.jwt_secret)?;
 
         Ok(AuthUser {
             user_id: claims.sub,

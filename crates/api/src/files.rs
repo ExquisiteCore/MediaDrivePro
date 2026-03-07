@@ -22,6 +22,7 @@ pub fn routes() -> Router<AppState> {
             get(get_file).put(update_file).delete(delete_file),
         )
         .route("/files/{id}/download", get(download))
+        .route("/files/{id}/preview", get(preview))
         .route("/files/multipart/init", post(multipart_init))
         .route(
             "/files/multipart/{upload_id}/{part_number}",
@@ -131,6 +132,24 @@ async fn download(
         (
             header::CONTENT_DISPOSITION,
             format!("attachment; filename=\"{}\"", file.name),
+        ),
+    ];
+
+    Ok((StatusCode::OK, headers, data))
+}
+
+async fn preview(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<impl IntoResponse, AppError> {
+    let (file, data) = FileService::download(&state.db, &state.storage, auth.user_id, id).await?;
+
+    let headers = [
+        (header::CONTENT_TYPE, file.content_type),
+        (
+            header::CONTENT_DISPOSITION,
+            format!("inline; filename=\"{}\"", file.name),
         ),
     ];
 

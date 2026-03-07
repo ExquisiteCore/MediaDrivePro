@@ -1,6 +1,7 @@
 use mdp_common::config::AppConfig;
 use sea_orm::{ConnectOptions, Database};
 use sea_orm_migration::MigratorTrait;
+use tower_http::services::{ServeDir, ServeFile};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
@@ -96,6 +97,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
         tracing::info!("WebDAV enabled at {}", config.webdav.prefix);
     }
+
+    // Serve SPA static files from web/dist/ with fallback to index.html
+    let spa = ServeDir::new("web/dist")
+        .not_found_service(ServeFile::new("web/dist/index.html"));
+    app = app.fallback_service(spa);
 
     // Start server
     let addr = format!("{}:{}", config.server.host, config.server.port);

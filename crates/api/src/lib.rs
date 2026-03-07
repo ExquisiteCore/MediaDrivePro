@@ -2,6 +2,7 @@ use axum::Router;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 
+mod admin;
 mod auth;
 mod files;
 mod folders;
@@ -15,7 +16,8 @@ pub fn build_router(state: state::AppState) -> Router {
         .merge(files::routes())
         .merge(folders::routes())
         .merge(shares::routes())
-        .merge(tokens::routes());
+        .merge(tokens::routes())
+        .merge(admin::routes());
 
     Router::new()
         .nest("/api/v1", api_v1)
