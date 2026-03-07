@@ -38,7 +38,7 @@ RUN touch src/main.rs crates/*/src/lib.rs migration/src/lib.rs \
 
 # Stage 3: Runtime
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates ffmpeg && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=backend /build/target/release/mediadrive-pro ./
 COPY --from=frontend /build/dist/ ./web/dist/

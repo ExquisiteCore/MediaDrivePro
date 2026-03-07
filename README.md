@@ -1,6 +1,6 @@
 # MediaDrive Pro
 
-基于对象存储的私有云网盘系统，提供 Web UI、WebDAV、HTTP API、图床、文件分享等功能。
+基于对象存储的私有云网盘系统，提供 Web UI、WebDAV、HTTP API、图床、视频转码播放、媒体识别等功能。
 
 ## 功能
 
@@ -10,6 +10,9 @@
 - **文件预览** — 图片/视频/音频/PDF/文本 在线预览
 - **文件分享** — 生成分享链接，支持密码保护、过期时间、下载次数限制
 - **图床** — 图片上传自动压缩为 WebP + 生成缩略图，返回 URL/Markdown 链接，支持防盗链，兼容 PicGo
+- **视频转码** — FFmpeg 后台转码为 HLS，支持 480p/720p/1080p 多档位，自动重试
+- **HLS 播放** — HLS.js 流媒体播放，支持字幕轨道，Safari 原生兼容
+- **媒体识别** — 智能文件名解析（剧集/电影/动漫）+ TMDB 刮削（海报/简介/年份）
 - **WebDAV** — 挂载为本地磁盘（Windows/macOS/Linux/移动端）
 - **API Token** — 创建独立 Token 用于 WebDAV、图床或第三方集成
 - **管理面板** — 管理员查看所有用户及存储使用
@@ -34,6 +37,7 @@
 - Rust 1.85+
 - Node.js 20+
 - pnpm
+- FFmpeg + ffprobe（视频转码需要，[下载](https://ffmpeg.org/download.html)）
 
 ### 构建前端
 
@@ -106,6 +110,17 @@ max_upload_size = 20971520   # 20MB
 compression_quality = 80     # WebP 压缩质量 (1-100)
 cdn_base_url = ""            # 留空则使用服务器自身地址
 allowed_referers = []        # 防盗链白名单，留空则不限制
+
+[video]
+ffmpeg_path = "ffmpeg"       # FFmpeg 可执行文件路径
+ffprobe_path = "ffprobe"     # ffprobe 可执行文件路径
+max_concurrent = 1           # 最大并行转码数
+default_profiles = ["720p"]  # 默认转码档位
+poll_interval_secs = 5       # 任务轮询间隔（秒）
+
+[tmdb]
+api_key = ""                 # TMDB API Key（留空则禁用媒体刮削）
+language = "zh-CN"           # TMDB 搜索语言
 ```
 
 支持环境变量覆盖（`MDP_` 前缀）：
@@ -215,6 +230,36 @@ GET    /img/thumb/:hash.webp — 缩略图
 
 上传响应包含 `url`、`thumb_url`、`markdown` 字段，方便直接使用。
 
+### 视频转码
+
+```
+POST /api/v1/transcode            — 创建转码任务（{ file_id, profile? }）
+GET  /api/v1/transcode/:id        — 查询转码任务状态
+GET  /api/v1/transcode?file_id=   — 列出文件的所有转码任务
+```
+
+转码档位：`480p`（1Mbps）、`720p`（2.5Mbps）、`1080p`（5Mbps），默认 `720p`。
+
+### HLS 流媒体
+
+```
+GET /api/v1/files/:file_id/stream/:path — HLS 流（m3u8 播放列表 + ts 分片 + vtt 字幕）
+```
+
+转码完成后，前端自动通过 HLS.js 播放。支持的输入格式：mp4、webm、ogg、mkv、avi、mov、flv、mpeg。
+
+### 媒体识别
+
+```
+GET  /api/v1/media/:file_id       — 获取媒体信息
+POST /api/v1/media/:file_id/scan  — 手动触发媒体识别（文件名解析 + TMDB 刮削）
+```
+
+文件名解析支持常见格式：
+- 剧集：`Title.S01E03.1080p.BluRay.mkv`
+- 动漫：`[字幕组] 标题 - 03 (1080p).mkv`
+- 电影：`Movie.Name.2024.720p.mkv`
+
 ### 管理员
 
 ```
@@ -264,6 +309,20 @@ curl -X POST http://localhost:8080/api/v1/images \
 curl -X POST http://localhost:8080/api/v1/images \
   -H "X-API-Token: demo:<api_token>" \
   -F "image=@photo.jpg"
+
+# 创建视频转码任务
+curl -X POST http://localhost:8080/api/v1/transcode \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"file_id": "<uuid>", "profile": "720p"}'
+
+# 查询转码状态
+curl http://localhost:8080/api/v1/transcode/<task_id> \
+  -H "Authorization: Bearer <token>"
+
+# 触发媒体识别
+curl -X POST http://localhost:8080/api/v1/media/<file_id>/scan \
+  -H "Authorization: Bearer <token>"
 ```
 
 ## 项目结构
@@ -277,7 +336,7 @@ MediaDrivePro/
 │   ├── common/               # 配置、错误类型、响应格式
 │   ├── auth/                 # JWT、密码哈希、认证中间件
 │   ├── storage/              # OpenDAL 存储封装
-│   ├── core/                 # 业务逻辑（用户/文件/目录/分享/Token/图床/分片上传）
+│   ├── core/                 # 业务逻辑（用户/文件/目录/分享/Token/图床/转码/媒体识别）
 │   ├── api/                  # HTTP 路由和处理器
 │   └── webdav/               # WebDAV 协议实现（dav-server + Basic Auth）
 └── web/                      # 前端（React + Vite + TypeScript）
@@ -298,7 +357,7 @@ MediaDrivePro/
 - [x] V0.3 — WebDAV + 分片上传 + API Token
 - [x] V1.0 — Web UI
 - [x] V1.1 — 图床（WebP 压缩 + 缩略图 + 防盗链 + PicGo 兼容）
-- [ ] V2.0 — 视频播放 + 转码 + 媒体库
+- [x] V2.0 — 视频转码（FFmpeg HLS）+ 流媒体播放（HLS.js）+ 媒体识别（TMDB 刮削）
 - [ ] V3.0 — 同步观影室
 
 ## License
