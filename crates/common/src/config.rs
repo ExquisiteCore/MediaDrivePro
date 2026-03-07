@@ -21,6 +21,12 @@ pub struct AppConfig {
 pub struct ServerConfig {
     pub host: String,
     pub port: u16,
+    #[serde(default = "default_log_level")]
+    pub log_level: String,
+}
+
+fn default_log_level() -> String {
+    "info,sqlx::query=warn".to_string()
 }
 
 #[derive(Debug, Clone, Deserialize)]

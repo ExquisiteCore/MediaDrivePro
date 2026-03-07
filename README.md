@@ -78,6 +78,7 @@ pnpm dev
 [server]
 host = "0.0.0.0"
 port = 8080
+log_level = "info,sqlx::query=warn"  # 日志等级（RUST_LOG 语法）
 
 [database]
 url = "sqlite:./data/mediadrive.db?mode=rwc"  # 或 postgres://user:pass@localhost/mediadrive
@@ -127,6 +128,19 @@ language = "zh-CN"           # TMDB 搜索语言
 
 ```bash
 MDP_DATABASE__URL=postgres://... MDP_AUTH__JWT_SECRET=your-secret cargo run
+```
+
+日志等级也可用 `RUST_LOG` 环境变量覆盖（优先级高于 config.toml）：
+
+```bash
+# 调试 SQL 查询
+RUST_LOG=info,sqlx::query=info cargo run
+
+# 只看警告和错误
+RUST_LOG=warn cargo run
+
+# 调试全部
+RUST_LOG=debug cargo run
 ```
 
 ## Web UI

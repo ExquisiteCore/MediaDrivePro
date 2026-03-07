@@ -6,14 +6,15 @@ use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitEx
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize tracing
+    // Load configuration first (needed for log_level)
+    let config = AppConfig::load("config.toml")?;
+
+    // Initialize tracing with configured log level
     tracing_subscriber::registry()
-        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
+        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(&config.server.log_level)))
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    // Load configuration
-    let config = AppConfig::load("config.toml")?;
     tracing::info!(
         "Starting MediaDrivePro on {}:{}",
         config.server.host,
