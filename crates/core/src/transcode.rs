@@ -362,7 +362,7 @@ async fn run_transcode_inner(
         .to_string_lossy()
         .to_string();
 
-    let status = Command::new(&config.ffmpeg_path)
+    let output = Command::new(&config.ffmpeg_path)
         .args([
             "-i",
             input_path.to_str().unwrap(),
@@ -386,18 +386,22 @@ async fn run_transcode_inner(
             "0",
             "-hls_segment_filename",
             &segment_pattern,
+            "-y",
             &output_m3u8,
         ])
-        .stdout(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::piped())
-        .status()
+        .output()
         .await
         .map_err(|e| AppError::Internal(format!("FFmpeg 启动失败: {e}")))?;
 
-    if !status.success() {
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let tail: String = stderr.lines().rev().take(20).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join("\n");
         return Err(AppError::Internal(format!(
-            "FFmpeg 退出码: {}",
-            status.code().unwrap_or(-1)
+            "FFmpeg 退出码: {}, 错误信息:\n{}",
+            output.status.code().unwrap_or(-1),
+            tail
         )));
     }
 
