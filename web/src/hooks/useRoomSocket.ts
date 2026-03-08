@@ -99,6 +99,7 @@ export function useRoomSocket(roomId: string | undefined) {
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const danmakuIdRef = useRef(0)
+  const connectRef = useRef<(() => void) | null>(null)
 
   const connect = useCallback(() => {
     if (!roomId) return
@@ -227,13 +228,17 @@ export function useRoomSocket(roomId: string | undefined) {
       // Reconnect with exponential backoff
       const delay = Math.min(1000 * Math.pow(2, retryRef.current), 16000)
       retryRef.current++
-      retryTimerRef.current = setTimeout(connect, delay)
+      retryTimerRef.current = setTimeout(() => connectRef.current?.(), delay)
     }
 
     ws.onerror = () => {
       ws.close()
     }
   }, [roomId])
+
+  useEffect(() => {
+    connectRef.current = connect
+  }, [connect])
 
   useEffect(() => {
     connect()

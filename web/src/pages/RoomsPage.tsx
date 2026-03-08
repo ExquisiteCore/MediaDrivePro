@@ -20,8 +20,8 @@ export default function RoomsPage() {
       setLoading(true)
       const data = await roomsApi.listRooms()
       setRooms(data)
-    } catch (e: any) {
-      setError(e.message)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : '请求失败')
     } finally {
       setLoading(false)
     }
@@ -38,8 +38,8 @@ export default function RoomsPage() {
       setShowCreate(false)
       setCreateName('')
       navigate(`/rooms/${room.id}`)
-    } catch (e: any) {
-      setError(e.message)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : '请求失败')
     }
   }
 
@@ -50,8 +50,8 @@ export default function RoomsPage() {
       setShowJoin(false)
       setJoinCode('')
       navigate(`/rooms/${room.id}`)
-    } catch (e: any) {
-      setError(e.message)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : '请求失败')
     }
   }
 

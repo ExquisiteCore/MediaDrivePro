@@ -19,6 +19,7 @@ export default function WatchRoomPage() {
   const [apiMembers, setApiMembers] = useState<RoomMember[]>([])
   const [showFilePicker, setShowFilePicker] = useState(false)
   const [error, setError] = useState('')
+  const [manualFileId, setManualFileId] = useState<string | null>(null)
 
   const {
     connected,
@@ -35,6 +36,7 @@ export default function WatchRoomPage() {
     removeDanmaku,
   } = useRoomSocket(id)
 
+  const activeFileId = playState.fileId || manualFileId
   const isHost = room?.host_id === user?.id
 
   // Fetch room detail
@@ -43,8 +45,8 @@ export default function WatchRoomPage() {
     roomsApi.getRoom(id).then((detail) => {
       setRoom(detail.room)
       setApiMembers(detail.members)
-    }).catch((e) => {
-      setError(e.message)
+    }).catch((e: unknown) => {
+      setError(e instanceof Error ? e.message : '请求失败')
     })
   }, [id])
 
@@ -54,8 +56,8 @@ export default function WatchRoomPage() {
     try {
       await roomsApi.closeRoom(id)
       navigate('/rooms')
-    } catch (e: any) {
-      setError(e.message)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : '请求失败')
     }
   }
 
@@ -67,9 +69,10 @@ export default function WatchRoomPage() {
     if (!id) return
     try {
       await roomsApi.setPlaying(id, fileId)
+      setManualFileId(fileId)
       setShowFilePicker(false)
-    } catch (e: any) {
-      setError(e.message)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : '请求失败')
     }
   }
 
@@ -165,7 +168,7 @@ export default function WatchRoomPage() {
         {/* Video area */}
         <div className="flex-1 p-4 flex flex-col">
           <RoomPlayer
-            fileId={playState.fileId}
+            fileId={activeFileId}
             playState={playState}
             clockOffset={clockOffset}
             isHost={isHost}

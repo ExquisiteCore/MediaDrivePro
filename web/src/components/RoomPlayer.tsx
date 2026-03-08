@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, useState } from 'react'
 import Hls from 'hls.js'
 import {
   Play,
@@ -38,6 +38,9 @@ export default function RoomPlayer({
   const containerRef = useRef<HTMLDivElement>(null)
   const seekBarRef = useRef<HTMLInputElement>(null)
   const lastSyncRef = useRef(0)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
+  const [muted, setMuted] = useState(false)
 
   // Load HLS source
   useEffect(() => {
@@ -45,7 +48,7 @@ export default function RoomPlayer({
     if (!video || !fileId) return
 
     const token = localStorage.getItem('token')
-    const src = `/api/v1/stream/${fileId}/master.m3u8`
+    const src = `/api/v1/files/${fileId}/stream/index.m3u8`
 
     if (Hls.isSupported()) {
       const hls = new Hls({
@@ -107,19 +110,29 @@ export default function RoomPlayer({
     lastSyncRef.current = now
   }, [playState, fileId, clockOffset])
 
-  // Update seek bar
+  // Track time/duration/muted via events
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
 
     const onTimeUpdate = () => {
+      setCurrentTime(video.currentTime)
       if (seekBarRef.current && video.duration) {
         seekBarRef.current.value = String(video.currentTime)
         seekBarRef.current.max = String(video.duration)
       }
     }
+    const onDurationChange = () => setDuration(video.duration)
+    const onVolumeChange = () => setMuted(video.muted)
+
     video.addEventListener('timeupdate', onTimeUpdate)
-    return () => video.removeEventListener('timeupdate', onTimeUpdate)
+    video.addEventListener('durationchange', onDurationChange)
+    video.addEventListener('volumechange', onVolumeChange)
+    return () => {
+      video.removeEventListener('timeupdate', onTimeUpdate)
+      video.removeEventListener('durationchange', onDurationChange)
+      video.removeEventListener('volumechange', onVolumeChange)
+    }
   }, [])
 
   const handleSeekBarChange = useCallback(
@@ -205,15 +218,14 @@ export default function RoomPlayer({
 
           {/* Time */}
           <span className="text-xs tabular-nums">
-            {formatTime(videoRef.current?.currentTime ?? 0)} /{' '}
-            {formatTime(videoRef.current?.duration ?? 0)}
+            {formatTime(currentTime)} / {formatTime(duration)}
           </span>
 
           <div className="flex-1" />
 
           {/* Volume */}
           <button onClick={toggleMute} className="hover:text-blue-400">
-            {videoRef.current?.muted ? (
+            {muted ? (
               <VolumeX className="w-5 h-5" />
             ) : (
               <Volume2 className="w-5 h-5" />
