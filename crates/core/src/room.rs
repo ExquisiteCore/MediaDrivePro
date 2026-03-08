@@ -30,7 +30,6 @@ pub struct MemberInfo {
 
 #[derive(Debug, serde::Serialize)]
 pub struct RoomDetail {
-    #[serde(flatten)]
     pub room: RoomInfo,
     pub members: Vec<MemberInfo>,
 }
