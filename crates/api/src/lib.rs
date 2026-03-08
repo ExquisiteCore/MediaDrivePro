@@ -1,4 +1,5 @@
 use axum::Router;
+use axum::extract::DefaultBodyLimit;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 
@@ -35,6 +36,7 @@ pub fn build_router(state: state::AppState) -> Router {
     Router::new()
         .nest("/api/v1", api_v1)
         .merge(images::public_routes())
+        .layer(DefaultBodyLimit::max(20 * 1024 * 1024)) // 20MB: covers 5MB chunks + 10MB simple uploads
         .layer(TraceLayer::new_for_http())
         .layer(
             CorsLayer::new()
