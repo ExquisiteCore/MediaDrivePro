@@ -22,3 +22,4 @@ sha2.workspace = true
 hex.workspace = true
 tokio.workspace = true
 futures.workspace = true
+html-escape = "0.2.13"

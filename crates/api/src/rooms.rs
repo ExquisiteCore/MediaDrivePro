@@ -11,6 +11,8 @@ use mdp_common::response::ApiResponse;
 use mdp_core::room::{MemberInfo, RoomDetail, RoomInfo, RoomService};
 use sea_orm::EntityTrait;
 use serde::Deserialize;
+use std::time::Duration;
+use tokio::sync::mpsc;
 use uuid::Uuid;
 
 use crate::room_manager::*;
@@ -31,7 +33,9 @@ pub fn ws_routes() -> Router<AppState> {
     Router::new().route("/rooms/{id}/ws", get(ws_upgrade))
 }
 
-// --- REST handlers ---
+// ===========================================================================
+// REST handlers
+// ===========================================================================
 
 #[derive(Deserialize)]
 struct CreateRoomReq {
@@ -75,14 +79,14 @@ async fn close_room(
 ) -> Result<ApiResponse<()>, AppError> {
     RoomService::close(&state.db, id, auth.user_id).await?;
 
-    if let Some(tx) = state.room_channels.get(&id) {
+    if let Some(hub) = state.room_channels.get(&id) {
         let msg = WsOut::Error {
             code: "ROOM_CLOSED".to_string(),
             message: "房间已关闭".to_string(),
         };
-        let _ = tx.send(serde_json::to_string(&msg).unwrap_or_default());
+        let _ = hub.tx.send(serde_json::to_string(&msg).unwrap_or_default());
     }
-    cleanup_channel(&state.room_channels, id);
+    cleanup_hub(&state.room_channels, id);
 
     Ok(ApiResponse::ok(()))
 }
@@ -118,18 +122,17 @@ async fn set_playing(
         return Err(AppError::Forbidden);
     }
 
-    let room =
+    // Persist to DB
+    let _room =
         RoomService::update_playback(&state.db, id, Some(body.file_id), None, Some("waiting"))
             .await?;
 
-    let tx = get_or_create_channel(&state.room_channels, id);
-    let msg = WsOut::Sync {
-        status: room.status,
-        time: room.current_time,
-        file_id: room.current_file_id.map(|fid: Uuid| fid.to_string()),
-        server_time: now_secs(),
-    };
-    let _ = tx.send(serde_json::to_string(&msg).unwrap_or_default());
+    // Update in-memory state + broadcast
+    if let Some(hub) = state.room_channels.get(&id) {
+        let mut st = hub.state.write().await;
+        st.set_file(body.file_id);
+        broadcast_sync_from_state(&hub.tx, &st);
+    }
 
     Ok(ApiResponse::ok(()))
 }
@@ -146,7 +149,9 @@ async fn list_members(
     Ok(ApiResponse::ok(members))
 }
 
-// --- WebSocket handler ---
+// ===========================================================================
+// WebSocket handler
+// ===========================================================================
 
 #[derive(Deserialize)]
 struct WsQuery {
@@ -192,7 +197,20 @@ async fn handle_ws(
 ) {
     let (mut ws_tx, mut ws_rx) = socket.split();
 
-    let tx = get_or_create_channel(&state.room_channels, room_id);
+    // Load or create in-memory hub with state from DB
+    let initial_state = match mdp_core::entity::rooms::Entity::find_by_id(room_id)
+        .one(&state.db)
+        .await
+    {
+        Ok(Some(room)) => RoomState::from_db(
+            &room.status,
+            room.current_time,
+            room.current_file_id,
+        ),
+        _ => RoomState::new(),
+    };
+
+    let (tx, hub_state) = get_or_create_hub(&state.room_channels, room_id, initial_state);
     let mut rx = tx.subscribe();
 
     // Broadcast member_join
@@ -201,28 +219,34 @@ async fn handle_ws(
     };
     let _ = tx.send(serde_json::to_string(&join_msg).unwrap_or_default());
 
-    // Send initial sync
-    if let Ok(Some(room)) = mdp_core::entity::rooms::Entity::find_by_id(room_id)
-        .one(&state.db)
-        .await
+    // Send initial sync to this client
     {
-        let sync = WsOut::Sync {
-            status: room.status.clone(),
-            time: room.current_time,
-            file_id: room.current_file_id.map(|fid: Uuid| fid.to_string()),
-            server_time: now_secs(),
-        };
+        let st = hub_state.read().await;
+        let sync = make_sync_msg(&st);
         let json = serde_json::to_string(&sync).unwrap_or_default();
+        let _ = ws_tx.send(Message::Text(json.into())).await;
+
+        // Send initial viewer count
+        let vc = WsOut::ViewerCount {
+            count: tx.receiver_count(),
+        };
+        let json = serde_json::to_string(&vc).unwrap_or_default();
         let _ = ws_tx.send(Message::Text(json.into())).await;
     }
 
-    let user_id_str = user_id.to_string();
-    let tx2 = tx.clone();
-    let db = state.db.clone();
-    let channels = state.room_channels.clone();
+    // Unicast channel (for pong + check_status responses)
+    let (direct_tx, mut direct_rx) = mpsc::channel::<String>(32);
 
+    let user_id_str = user_id.to_string();
+    let tx_read = tx.clone();
+    let hub_state_read = hub_state.clone();
+    let db_read = state.db.clone();
+
+    // -----------------------------------------------------------------------
     // Read loop: client → server
+    // -----------------------------------------------------------------------
     let user_brief_clone = user_brief.clone();
+    let direct_tx_read = direct_tx.clone();
     let read_task = tokio::spawn(async move {
         while let Some(Ok(msg)) = ws_rx.next().await {
             let text = match msg {
@@ -240,118 +264,210 @@ async fn handle_ws(
                     let pong = WsOut::Pong {
                         server_time: now_secs(),
                     };
-                    let payload = serde_json::to_string(&pong).unwrap_or_default();
-                    let _ = tx2.send(format!("__direct__{user_id}|{payload}"));
+                    let _ = direct_tx_read
+                        .send(serde_json::to_string(&pong).unwrap_or_default())
+                        .await;
                 }
-                WsIn::Play {} => {
-                    if let Ok(true) = RoomService::is_host(&db, room_id, user_id).await {
-                        if let Ok(room) = RoomService::update_playback(
-                            &db, room_id, None, None, Some("playing"),
-                        )
-                        .await
-                        {
-                            broadcast_sync(&tx2, &room);
-                        }
+
+                WsIn::Play { timestamp } => {
+                    if let Ok(true) = RoomService::is_host(&db_read, room_id, user_id).await {
+                        let time_diff = calculate_time_diff(timestamp);
+                        let mut st = hub_state_read.write().await;
+                        st.set_playing(true, time_diff);
+                        broadcast_sync_from_state(&tx_read, &st);
                     }
                 }
-                WsIn::Pause {} => {
-                    if let Ok(true) = RoomService::is_host(&db, room_id, user_id).await {
-                        if let Ok(room) = RoomService::update_playback(
-                            &db, room_id, None, None, Some("paused"),
-                        )
-                        .await
-                        {
-                            broadcast_sync(&tx2, &room);
-                        }
+
+                WsIn::Pause { timestamp } => {
+                    if let Ok(true) = RoomService::is_host(&db_read, room_id, user_id).await {
+                        let time_diff = calculate_time_diff(timestamp);
+                        let mut st = hub_state_read.write().await;
+                        st.set_playing(false, time_diff);
+                        broadcast_sync_from_state(&tx_read, &st);
                     }
                 }
-                WsIn::Seek { time } => {
-                    if let Ok(true) = RoomService::is_host(&db, room_id, user_id).await {
-                        if let Ok(room) = RoomService::update_playback(
-                            &db, room_id, None, Some(time), None,
-                        )
-                        .await
-                        {
-                            broadcast_sync(&tx2, &room);
-                        }
+
+                WsIn::Seek { time, timestamp } => {
+                    if let Ok(true) = RoomService::is_host(&db_read, room_id, user_id).await {
+                        let time_diff = calculate_time_diff(timestamp);
+                        let mut st = hub_state_read.write().await;
+                        st.seek(time, time_diff);
+                        broadcast_sync_from_state(&tx_read, &st);
                     }
                 }
+
+                WsIn::CheckStatus {
+                    is_playing,
+                    current_time,
+                    playback_rate,
+                    timestamp,
+                } => {
+                    let time_diff = calculate_time_diff(timestamp);
+                    let st = hub_state_read.read().await;
+                    let server_pos = st.current_position();
+                    let client_pos = current_time + time_diff;
+
+                    let needs_correction =
+                        is_playing != (st.status == PlayStatus::Playing)
+                            || playback_rate != st.playback_rate
+                            || (server_pos - client_pos).abs() > MAX_DRIFT;
+
+                    if needs_correction {
+                        let correction = WsOut::CheckStatus {
+                            is_playing: st.status == PlayStatus::Playing,
+                            current_time: st.current_position(),
+                            playback_rate: st.playback_rate,
+                        };
+                        let _ = direct_tx_read
+                            .send(serde_json::to_string(&correction).unwrap_or_default())
+                            .await;
+                    }
+                }
+
                 WsIn::Chat { content } => {
+                    let content = content.trim().to_string();
+                    if content.is_empty() || content.len() > MAX_CHAT_LENGTH {
+                        continue;
+                    }
+                    let safe = html_escape::encode_text(&content).to_string();
                     let chat = WsOut::Chat {
                         user: user_brief_clone.clone(),
-                        content,
+                        content: safe,
                     };
-                    let _ = tx2.send(serde_json::to_string(&chat).unwrap_or_default());
+                    let _ = tx_read.send(serde_json::to_string(&chat).unwrap_or_default());
                 }
+
                 WsIn::Danmaku {
                     content,
                     color,
                     position,
                 } => {
-                    let danmaku = WsOut::Danmaku {
-                        user_id: user_id.to_string(),
-                        content,
-                        color,
-                        position,
-                        video_time: 0.0,
-                    };
-                    let _ = tx2.send(serde_json::to_string(&danmaku).unwrap_or_default());
-                }
-            }
-        }
-    });
-
-    // Write loop: server → client
-    let write_task = tokio::spawn(async move {
-        loop {
-            match rx.recv().await {
-                Ok(msg) => {
-                    if let Some(rest) = msg.strip_prefix("__direct__") {
-                        if let Some((target_id, payload)) = rest.split_once('|') {
-                            if target_id == user_id_str {
-                                if ws_tx
-                                    .send(Message::Text(payload.to_string().into()))
-                                    .await
-                                    .is_err()
-                                {
-                                    break;
-                                }
-                            }
-                        }
+                    let content = content.trim().to_string();
+                    if content.is_empty() || content.len() > 200 {
                         continue;
                     }
-                    if ws_tx.send(Message::Text(msg.into())).await.is_err() {
-                        break;
-                    }
+                    let safe = html_escape::encode_text(&content).to_string();
+                    let danmaku = WsOut::Danmaku {
+                        user_id: user_id.to_string(),
+                        content: safe,
+                        color,
+                        position,
+                        video_time: {
+                            let st = hub_state_read.read().await;
+                            st.current_position()
+                        },
+                    };
+                    let _ = tx_read.send(serde_json::to_string(&danmaku).unwrap_or_default());
                 }
-                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
-                Err(_) => break,
             }
         }
     });
 
+    // -----------------------------------------------------------------------
+    // Write loop: server → client (broadcast + unicast)
+    // -----------------------------------------------------------------------
+    let write_task = tokio::spawn(async move {
+        loop {
+            tokio::select! {
+                // Broadcast messages
+                result = rx.recv() => {
+                    match result {
+                        Ok(msg) => {
+                            if ws_tx.send(Message::Text(msg.into())).await.is_err() {
+                                break;
+                            }
+                        }
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                        Err(_) => break,
+                    }
+                }
+                // Unicast messages (pong, check_status corrections)
+                result = direct_rx.recv() => {
+                    match result {
+                        Some(msg) => {
+                            if ws_tx.send(Message::Text(msg.into())).await.is_err() {
+                                break;
+                            }
+                        }
+                        None => break,
+                    }
+                }
+            }
+        }
+    });
+
+    // -----------------------------------------------------------------------
+    // Heartbeat: periodic sync broadcast + viewer count
+    // -----------------------------------------------------------------------
+    let tx_hb = tx.clone();
+    let hub_state_hb = hub_state.clone();
+    let heartbeat_task = tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(5));
+        let mut last_count: usize = 0;
+        loop {
+            interval.tick().await;
+
+            // Viewer count
+            let count = tx_hb.receiver_count();
+            if count != last_count {
+                let vc = WsOut::ViewerCount { count };
+                let _ = tx_hb.send(serde_json::to_string(&vc).unwrap_or_default());
+                last_count = count;
+            }
+
+            // Periodic sync when playing
+            let st = hub_state_hb.read().await;
+            if st.status == PlayStatus::Playing {
+                broadcast_sync_from_state(&tx_hb, &st);
+            }
+        }
+    });
+
+    // Wait for any task to finish
     tokio::select! {
         _ = read_task => {},
         _ = write_task => {},
+        _ = heartbeat_task => {},
     }
 
-    // Cleanup
+    // -----------------------------------------------------------------------
+    // Cleanup on disconnect
+    // -----------------------------------------------------------------------
     let leave_msg = WsOut::MemberLeave {
-        user_id: user_id.to_string(),
+        user_id: user_id_str,
     };
     let _ = tx.send(serde_json::to_string(&leave_msg).unwrap_or_default());
-    cleanup_channel(&channels, room_id);
+
+    // If last subscriber, persist state to DB then remove hub
+    if tx.receiver_count() <= 1 {
+        let st = hub_state.read().await;
+        let _ = RoomService::update_playback(
+            &state.db,
+            room_id,
+            st.file_id,
+            Some(st.current_position()),
+            Some(st.status.as_str()),
+        )
+        .await;
+        state.room_channels.remove(&room_id);
+    }
 }
 
-fn broadcast_sync(
-    tx: &tokio::sync::broadcast::Sender<String>,
-    room: &mdp_core::entity::rooms::Model,
-) {
-    let sync = WsOut::Sync {
-        status: room.status.clone(),
-        time: room.current_time,
-        file_id: room.current_file_id.map(|fid: Uuid| fid.to_string()),
+// ===========================================================================
+// Helpers
+// ===========================================================================
+
+fn make_sync_msg(state: &RoomState) -> WsOut {
+    WsOut::Sync {
+        status: state.status.as_str().to_string(),
+        time: state.current_position(),
+        playback_rate: state.playback_rate,
+        file_id: state.file_id.map(|fid| fid.to_string()),
         server_time: now_secs(),
-    };
+    }
+}
+
+fn broadcast_sync_from_state(tx: &tokio::sync::broadcast::Sender<String>, state: &RoomState) {
+    let sync = make_sync_msg(state);
     let _ = tx.send(serde_json::to_string(&sync).unwrap_or_default());
 }
