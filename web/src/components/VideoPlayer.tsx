@@ -50,7 +50,7 @@ export default function VideoPlayer({ src, subtitles }: VideoPlayerProps) {
         {subtitles && (
           <track
             kind="subtitles"
-            src={subtitles}
+            src={`${subtitles}${subtitles.includes('?') ? '&' : '?'}token=${encodeURIComponent(localStorage.getItem('token') || '')}`}
             srcLang="zh"
             label="字幕"
             default
