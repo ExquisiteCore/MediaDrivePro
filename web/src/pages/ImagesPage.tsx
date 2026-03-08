@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { listImages, uploadImage, deleteImage } from '../api/images'
 import type { ImageInfo } from '../api/images'
 import { formatFileSize, formatDateTime } from '../lib/format'
+import { copyToClipboard } from '../lib/clipboard'
 import { Upload, Trash2, Copy, Check, X, ImageIcon, ChevronLeft, ChevronRight } from 'lucide-react'
 
 export default function ImagesPage() {
@@ -64,8 +65,8 @@ export default function ImagesPage() {
     }
   }
 
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text)
+  const copyText = (text: string, label: string) => {
+    copyToClipboard(text)
     setCopied(label)
     setTimeout(() => setCopied(''), 2000)
   }
@@ -184,25 +185,25 @@ export default function ImagesPage() {
                   label="URL"
                   value={selected.url}
                   copied={copied}
-                  onCopy={copyToClipboard}
+                  onCopy={copyText}
                 />
                 <CopyRow
                   label="Markdown"
                   value={selected.markdown}
                   copied={copied}
-                  onCopy={copyToClipboard}
+                  onCopy={copyText}
                 />
                 <CopyRow
                   label="HTML"
                   value={`<img src="${selected.url}" alt="${selected.original_name}" />`}
                   copied={copied}
-                  onCopy={copyToClipboard}
+                  onCopy={copyText}
                 />
                 <CopyRow
                   label="BBCode"
                   value={`[img]${selected.url}[/img]`}
                   copied={copied}
-                  onCopy={copyToClipboard}
+                  onCopy={copyText}
                 />
               </div>
 

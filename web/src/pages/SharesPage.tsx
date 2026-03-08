@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { listShares, deleteShare } from '../api/shares'
 import type { ShareInfo } from '../api/shares'
 import { formatDateTime } from '../lib/format'
+import { copyToClipboard } from '../lib/clipboard'
 import { Copy, Check, Trash2, Link } from 'lucide-react'
 import ConfirmDialog from '../components/ConfirmDialog'
 
@@ -35,8 +36,8 @@ export default function SharesPage() {
     }
   }
 
-  const handleCopy = async (token: string, id: string) => {
-    await navigator.clipboard.writeText(`${window.location.origin}/s/${token}`)
+  const handleCopy = (token: string, id: string) => {
+    copyToClipboard(`${window.location.origin}/s/${token}`)
     setCopiedId(id)
     setTimeout(() => setCopiedId(null), 2000)
   }

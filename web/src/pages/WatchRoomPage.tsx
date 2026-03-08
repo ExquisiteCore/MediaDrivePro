@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Copy, LogOut, Users, Film, X, Wifi, WifiOff } from 'lucide-react'
+import { copyToClipboard } from '../lib/clipboard'
 import * as roomsApi from '../api/rooms'
 import { listFiles } from '../api/files'
 import { listTranscodes } from '../api/transcode'
@@ -78,7 +79,7 @@ export default function WatchRoomPage() {
 
   const copyCode = () => {
     if (room) {
-      navigator.clipboard.writeText(room.invite_code)
+      copyToClipboard(room.invite_code)
     }
   }
 

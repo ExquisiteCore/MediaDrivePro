@@ -172,11 +172,10 @@ fn resolve_image_base_url(headers: &HeaderMap, cdn_base_url: &str) -> String {
         return cdn_base_url.to_string();
     }
     if let Some(host) = headers.get(header::HOST).and_then(|v| v.to_str().ok()) {
-        let scheme = if host.starts_with("localhost") || host.starts_with("127.0.0.1") {
-            "http"
-        } else {
-            "https"
-        };
+        let scheme = headers
+            .get("X-Forwarded-Proto")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("http");
         format!("{scheme}://{host}/img")
     } else {
         String::new()

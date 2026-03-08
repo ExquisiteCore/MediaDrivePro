@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { createShare } from '../api/shares'
+import { copyToClipboard } from '../lib/clipboard'
 import { Copy, Check } from 'lucide-react'
 
 interface ShareModalProps {
@@ -46,8 +47,8 @@ export default function ShareModal({ open, fileId, folderId, onClose }: ShareMod
     }
   }
 
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(shareUrl)
+  const handleCopy = () => {
+    copyToClipboard(shareUrl)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }

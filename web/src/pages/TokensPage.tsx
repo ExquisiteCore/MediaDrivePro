@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { listTokens, createToken, deleteToken } from '../api/tokens'
 import type { ApiTokenInfo, ApiTokenCreated } from '../api/tokens'
 import { formatDateTime } from '../lib/format'
+import { copyToClipboard } from '../lib/clipboard'
 import { Key, Trash2, Plus, Copy, Check, Eye, EyeOff } from 'lucide-react'
 import ConfirmDialog from '../components/ConfirmDialog'
 
@@ -63,8 +64,8 @@ export default function TokensPage() {
     }
   }
 
-  const handleCopy = async (text: string) => {
-    await navigator.clipboard.writeText(text)
+  const handleCopy = (text: string) => {
+    copyToClipboard(text)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }

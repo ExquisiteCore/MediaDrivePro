@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus, LogIn, Copy, Users, Tv2, X } from 'lucide-react'
 import * as roomsApi from '../api/rooms'
+import { copyToClipboard } from '../lib/clipboard'
 import type { Room } from '../api/rooms'
 
 export default function RoomsPage() {
@@ -56,7 +57,7 @@ export default function RoomsPage() {
   }
 
   const copyCode = (code: string) => {
-    navigator.clipboard.writeText(code)
+    copyToClipboard(code)
   }
 
   const statusBadge = (status: string) => {
