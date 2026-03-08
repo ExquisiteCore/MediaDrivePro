@@ -147,7 +147,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Serve SPA static files from web/dist/ with fallback to index.html
     let spa = ServeDir::new("web/dist")
-        .not_found_service(ServeFile::new("web/dist/index.html"));
+        .fallback(ServeFile::new("web/dist/index.html"));
     app = app.fallback_service(spa);
 
     // Start server
