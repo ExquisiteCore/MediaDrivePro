@@ -20,6 +20,7 @@ interface RoomPlayerProps {
   onPlay: () => void
   onPause: () => void
   onSeek: (time: number) => void
+  videoElRef?: React.MutableRefObject<HTMLVideoElement | null>
 }
 
 export default function RoomPlayer({
@@ -32,8 +33,18 @@ export default function RoomPlayer({
   onPlay,
   onPause,
   onSeek,
+  videoElRef,
 }: RoomPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
+
+  // Combined ref callback to set both internal and external refs
+  const setVideoRef = useCallback(
+    (el: HTMLVideoElement | null) => {
+      (videoRef as React.MutableRefObject<HTMLVideoElement | null>).current = el
+      if (videoElRef) videoElRef.current = el
+    },
+    [videoElRef],
+  )
   const hlsRef = useRef<Hls | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const seekBarRef = useRef<HTMLInputElement>(null)
@@ -80,15 +91,18 @@ export default function RoomPlayer({
     const elapsed = now + clockOffset - playState.serverTime
 
     if (playState.status === 'playing') {
-      const targetTime = playState.time + elapsed
+      const targetTime = playState.time + elapsed * playState.playbackRate
       const diff = Math.abs(video.currentTime - targetTime)
 
       if (diff > 1.5) {
         video.currentTime = targetTime
+        video.playbackRate = playState.playbackRate
       } else if (diff > 0.3) {
-        video.playbackRate = video.currentTime < targetTime ? 1.05 : 0.95
+        video.playbackRate = video.currentTime < targetTime
+          ? playState.playbackRate * 1.05
+          : playState.playbackRate * 0.95
       } else {
-        video.playbackRate = 1.0
+        video.playbackRate = playState.playbackRate
       }
 
       if (video.paused) {
@@ -171,7 +185,7 @@ export default function RoomPlayer({
   return (
     <div ref={containerRef} className="relative bg-black rounded-lg overflow-hidden">
       <video
-        ref={videoRef}
+        ref={setVideoRef}
         className="w-full aspect-video"
         crossOrigin="anonymous"
         playsInline

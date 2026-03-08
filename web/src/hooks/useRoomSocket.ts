@@ -25,16 +25,38 @@ export interface DanmakuItem {
 export interface PlayState {
   status: string
   time: number
+  playbackRate: number
   fileId: string | null
   serverTime: number
 }
+
+export interface VideoState {
+  paused: boolean
+  currentTime: number
+  playbackRate: number
+}
+
+// --- Server → Client message types ---
 
 interface WsOutSync {
   type: 'sync'
   status: string
   time: number
+  playback_rate: number
   file_id: string | null
   server_time: number
+}
+
+interface WsOutCheckStatus {
+  type: 'check_status'
+  is_playing: boolean
+  current_time: number
+  playback_rate: number
+}
+
+interface WsOutViewerCount {
+  type: 'viewer_count'
+  count: number
 }
 
 interface WsOutMemberJoin {
@@ -75,6 +97,8 @@ interface WsOutError {
 
 type WsOutMessage =
   | WsOutSync
+  | WsOutCheckStatus
+  | WsOutViewerCount
   | WsOutMemberJoin
   | WsOutMemberLeave
   | WsOutChat
@@ -82,24 +106,37 @@ type WsOutMessage =
   | WsOutPong
   | WsOutError
 
-export function useRoomSocket(roomId: string | undefined) {
+export function useRoomSocket(
+  roomId: string | undefined,
+  getVideoState?: () => VideoState | null,
+) {
   const wsRef = useRef<WebSocket | null>(null)
   const [connected, setConnected] = useState(false)
   const [playState, setPlayState] = useState<PlayState>({
     status: 'waiting',
     time: 0,
+    playbackRate: 1.0,
     fileId: null,
     serverTime: 0,
   })
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [danmakuList, setDanmakuList] = useState<DanmakuItem[]>([])
   const [members, setMembers] = useState<UserBrief[]>([])
+  const [viewerCount, setViewerCount] = useState(0)
   const [clockOffset, setClockOffset] = useState(0)
   const retryRef = useRef(0)
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const checkStatusTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const danmakuIdRef = useRef(0)
   const connectRef = useRef<(() => void) | null>(null)
+  const pingStartRef = useRef(0)
+  const getVideoStateRef = useRef(getVideoState)
+
+  // Keep the ref up to date
+  useEffect(() => {
+    getVideoStateRef.current = getVideoState
+  }, [getVideoState])
 
   const connect = useCallback(() => {
     if (!roomId) return
@@ -117,12 +154,30 @@ export function useRoomSocket(roomId: string | undefined) {
       setConnected(true)
       retryRef.current = 0
 
-      // Start ping interval for clock sync
+      // Ping interval for clock sync (every 5s)
       pingTimerRef.current = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) {
+          pingStartRef.current = Date.now()
           ws.send(JSON.stringify({ type: 'ping' }))
         }
       }, 5000)
+
+      // CHECK_STATUS interval (every 10s)
+      checkStatusTimerRef.current = setInterval(() => {
+        if (ws.readyState !== WebSocket.OPEN) return
+        const videoState = getVideoStateRef.current?.()
+        if (videoState) {
+          ws.send(
+            JSON.stringify({
+              type: 'check_status',
+              is_playing: !videoState.paused,
+              current_time: videoState.currentTime,
+              playback_rate: videoState.playbackRate,
+              timestamp: Date.now(),
+            }),
+          )
+        }
+      }, 10000)
     }
 
     ws.onmessage = (event) => {
@@ -138,9 +193,25 @@ export function useRoomSocket(roomId: string | undefined) {
           setPlayState({
             status: msg.status,
             time: msg.time,
+            playbackRate: msg.playback_rate,
             fileId: msg.file_id,
             serverTime: msg.server_time,
           })
+          break
+
+        case 'check_status':
+          // Server correction — force update playback state
+          setPlayState((prev) => ({
+            ...prev,
+            status: msg.is_playing ? 'playing' : 'paused',
+            time: msg.current_time,
+            playbackRate: msg.playback_rate,
+            serverTime: Date.now() / 1000,
+          }))
+          break
+
+        case 'viewer_count':
+          setViewerCount(msg.count)
           break
 
         case 'member_join':
@@ -197,8 +268,9 @@ export function useRoomSocket(roomId: string | undefined) {
           break
 
         case 'pong': {
-          const now = Date.now() / 1000
-          const offset = msg.server_time - now
+          // RTT-aware clock offset
+          const rtt = (Date.now() - pingStartRef.current) / 1000
+          const offset = msg.server_time - Date.now() / 1000 + rtt / 2
           setClockOffset(offset)
           break
         }
@@ -221,9 +293,8 @@ export function useRoomSocket(roomId: string | undefined) {
 
     ws.onclose = () => {
       setConnected(false)
-      if (pingTimerRef.current) {
-        clearInterval(pingTimerRef.current)
-      }
+      if (pingTimerRef.current) clearInterval(pingTimerRef.current)
+      if (checkStatusTimerRef.current) clearInterval(checkStatusTimerRef.current)
 
       // Reconnect with exponential backoff
       const delay = Math.min(1000 * Math.pow(2, retryRef.current), 16000)
@@ -245,14 +316,16 @@ export function useRoomSocket(roomId: string | undefined) {
     return () => {
       if (retryTimerRef.current) clearTimeout(retryTimerRef.current)
       if (pingTimerRef.current) clearInterval(pingTimerRef.current)
+      if (checkStatusTimerRef.current) clearInterval(checkStatusTimerRef.current)
       retryRef.current = Infinity // prevent reconnect on unmount
       wsRef.current?.close()
     }
   }, [connect])
 
+  // All outgoing messages include timestamp for latency compensation
   const send = useCallback((data: object) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(data))
+      wsRef.current.send(JSON.stringify({ ...data, timestamp: Date.now() }))
     }
   }, [])
 
@@ -284,6 +357,7 @@ export function useRoomSocket(roomId: string | undefined) {
     messages,
     danmakuList,
     members,
+    viewerCount,
     clockOffset,
     sendChat,
     sendDanmaku,

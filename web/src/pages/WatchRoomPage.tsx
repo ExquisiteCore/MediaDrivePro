@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Copy, LogOut, Users, Film, X, Wifi, WifiOff } from 'lucide-react'
 import { copyToClipboard } from '../lib/clipboard'
@@ -7,6 +7,7 @@ import { listFiles } from '../api/files'
 import { listTranscodes } from '../api/transcode'
 import { useAuthStore } from '../store/auth'
 import { useRoomSocket } from '../hooks/useRoomSocket'
+import type { VideoState } from '../hooks/useRoomSocket'
 import RoomPlayer from '../components/RoomPlayer'
 import ChatPanel from '../components/ChatPanel'
 import type { Room, RoomMember } from '../api/rooms'
@@ -22,12 +23,20 @@ export default function WatchRoomPage() {
   const [error, setError] = useState('')
   const [manualFileId, setManualFileId] = useState<string | null>(null)
 
+  const videoElRef = useRef<HTMLVideoElement | null>(null)
+  const getVideoState = useCallback((): VideoState | null => {
+    const v = videoElRef.current
+    if (!v) return null
+    return { paused: v.paused, currentTime: v.currentTime, playbackRate: v.playbackRate }
+  }, [])
+
   const {
     connected,
     playState,
     messages,
     danmakuList,
     members: wsMembers,
+    viewerCount,
     clockOffset,
     sendChat,
     sendDanmaku,
@@ -35,7 +44,7 @@ export default function WatchRoomPage() {
     sendPause,
     sendSeek,
     removeDanmaku,
-  } = useRoomSocket(id)
+  } = useRoomSocket(id, getVideoState)
 
   const activeFileId = playState.fileId || manualFileId
   const isHost = room?.host_id === user?.id
@@ -130,6 +139,11 @@ export default function WatchRoomPage() {
               <WifiOff className="w-3 h-3" /> 断开
             </span>
           )}
+          {viewerCount > 0 && (
+            <span className="flex items-center gap-1 text-xs text-gray-500">
+              <Users className="w-3 h-3" /> {viewerCount} 人在线
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {isHost && (
@@ -178,6 +192,7 @@ export default function WatchRoomPage() {
             onPlay={sendPlay}
             onPause={sendPause}
             onSeek={sendSeek}
+            videoElRef={videoElRef}
           />
         </div>
 
